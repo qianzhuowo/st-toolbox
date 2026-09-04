@@ -1,0 +1,20 @@
+#st-toolbox-settings .st-toolbox-notification-switches {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 4px 10px;
+}
+
+#st-toolbox-settings .st-toolbox-volume {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 10px;
+}
+
+#st-toolbox-settings .st-toolbox-volume input {
+    width: 100%;
+}
+
+#st-toolbox-settings .st-toolbox-warning {
+    color: var(--warning-color, #e8a849);
+}

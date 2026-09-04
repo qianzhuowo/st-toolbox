@@ -1,0 +1,54 @@
+@import url('./features/qr-bar/style.css');
+@import url('./features/notifications/style.css');
+
+#st-toolbox-settings .inline-drawer-content {
+    padding: 0;
+}
+
+#st-toolbox-settings-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+#st-toolbox-settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 10px;
+}
+
+#st-toolbox-settings .st-toolbox-section {
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 22%, transparent);
+    border-radius: 6px;
+    padding: 10px;
+}
+
+#st-toolbox-settings .st-toolbox-section > h4 {
+    margin: 0 0 8px;
+}
+
+#st-toolbox-settings .st-toolbox-help {
+    margin: 6px 0;
+    color: var(--SmartThemeBodyColor);
+    font-size: 0.9em;
+    opacity: 0.75;
+    line-height: 1.4;
+}
+
+#st-toolbox-settings .st-toolbox-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+#st-toolbox-settings .st-toolbox-row > .text_pole {
+    min-width: 0;
+    flex: 1 1 180px;
+}
+
+#st-toolbox-settings .st-toolbox-icon-button {
+    min-width: 36px;
+    justify-content: center;
+}

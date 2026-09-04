@@ -1,0 +1,11 @@
+{
+    "display_name": "ST Toolbox",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Limcode",
+    "version": "1.0.0",
+    "description": "可持久化的 QR 栏开关，以及可靠的回复提示音与标签页提醒。"
+}
