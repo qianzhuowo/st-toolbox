@@ -142,7 +142,6 @@ export function createQrBarFeature({ eventSource, eventTypes, settings, saveSett
         const section = document.createElement('section');
         section.className = 'st-toolbox-section';
         section.innerHTML = `
-            <h4>QR 栏收起/展开</h4>
             <label class="checkbox_label">
                 <input id="st-toolbox-qr-enabled" type="checkbox">
                 <span>启用 QR 栏切换按钮</span>
@@ -173,5 +172,10 @@ export function createQrBarFeature({ eventSource, eventTypes, settings, saveSett
         container.appendChild(section);
     }
 
-    return { init, renderSettings };
+    function syncSettings() {
+        ensureButton();
+        updateSettingsControls();
+    }
+
+    return { init, renderSettings, syncSettings };
 }

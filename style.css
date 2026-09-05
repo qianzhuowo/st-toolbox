@@ -1,5 +1,6 @@
 @import url('./features/qr-bar/style.css');
 @import url('./features/notifications/style.css');
+@import url('./features/screenshot/style.css');
 
 #st-toolbox-settings .inline-drawer-content {
     padding: 0;
@@ -13,18 +14,51 @@
 #st-toolbox-settings-body {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     padding: 10px;
+}
+
+#st-toolbox-settings .st-toolbox-feature-drawer {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 22%, transparent);
+    border-radius: 6px;
+}
+
+#st-toolbox-settings .st-toolbox-feature-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 10px;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 85%, transparent);
+}
+
+#st-toolbox-settings .st-toolbox-feature-summary::-webkit-details-marker {
+    display: none;
+}
+
+#st-toolbox-settings .st-toolbox-feature-summary::marker {
+    content: '';
+}
+
+#st-toolbox-settings .st-toolbox-feature-summary i {
+    transition: transform 0.18s ease;
+}
+
+#st-toolbox-settings .st-toolbox-feature-drawer[open] > .st-toolbox-feature-summary i {
+    transform: rotate(180deg);
+}
+
+#st-toolbox-settings .st-toolbox-feature-content {
+    padding: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 15%, transparent);
 }
 
 #st-toolbox-settings .st-toolbox-section {
-    border: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 22%, transparent);
-    border-radius: 6px;
-    padding: 10px;
-}
-
-#st-toolbox-settings .st-toolbox-section > h4 {
-    margin: 0 0 8px;
+    padding: 0;
 }
 
 #st-toolbox-settings .st-toolbox-help {

@@ -985,7 +985,6 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
         const section = document.createElement('section');
         section.className = 'st-toolbox-section st-toolbox-notifications';
         section.innerHTML = `
-            <h4>回复提示通知</h4>
             <div class="st-toolbox-notification-switches">
                 <label class="checkbox_label">
                     <input id="st-toolbox-notifications-enabled" type="checkbox">
@@ -1055,5 +1054,19 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
         container.appendChild(section);
     }
 
-    return { init, renderSettings };
+    function syncSettings() {
+        if (!featureSettings.enabled || !featureSettings.soundEnabled) {
+            stopCurrentAudio();
+        } else if (currentPlayback) {
+            currentPlayback.audio.volume = featureSettings.volume;
+        }
+        if (!featureSettings.enabled || !featureSettings.flashEnabled) {
+            stopFlashing();
+        }
+        populateSelect('success');
+        populateSelect('error');
+        updateControls();
+    }
+
+    return { init, renderSettings, syncSettings };
 }

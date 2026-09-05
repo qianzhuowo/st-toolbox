@@ -1,0 +1,105 @@
+.st-toolbox-screenshot-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    inline-size: 1em;
+    min-inline-size: 1em;
+    block-size: 1em;
+    box-sizing: content-box;
+    line-height: 1;
+    white-space: nowrap;
+    align-items: center;
+    justify-content: center;
+}
+
+.st-toolbox-screenshot-loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.st-toolbox-screenshot-range-menu {
+    position: fixed;
+    z-index: 10050;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: max-content;
+    max-height: min(70vh, 360px);
+    padding: 5px;
+    overflow-y: auto;
+    color: var(--SmartThemeBodyColor);
+    background: var(--SmartThemeBlurTintColor);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 7px;
+    box-shadow: 0 5px 18px var(--black70a, rgba(0, 0, 0, 0.7));
+}
+
+.st-toolbox-screenshot-range-menu button {
+    padding: 6px 10px;
+    color: inherit;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.st-toolbox-screenshot-range-menu button:hover,
+.st-toolbox-screenshot-range-menu button:focus-visible {
+    background: color-mix(in srgb, var(--SmartThemeBodyColor) 15%, transparent);
+}
+
+body.st-toolbox-screenshot-selecting #chat .mes {
+    cursor: pointer;
+}
+
+body.st-toolbox-screenshot-selecting #chat .mes_buttons {
+    pointer-events: none;
+    opacity: 0.2;
+}
+
+#chat .mes.st-toolbox-screenshot-selected {
+    outline: 2px solid var(--SmartThemeQuoteColor) !important;
+    outline-offset: -3px;
+}
+
+#st-toolbox-settings .st-toolbox-screenshot-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+#st-toolbox-settings .st-toolbox-screenshot-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+#st-toolbox-settings .st-toolbox-screenshot-label-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
+
+#st-toolbox-settings .st-toolbox-screenshot-label-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+}
+
+#st-toolbox-settings .st-toolbox-setting-hint {
+    cursor: help;
+    opacity: 0.65;
+    font-size: 0.9em;
+}
+
+#st-toolbox-settings .st-toolbox-setting-hint:hover,
+#st-toolbox-settings .st-toolbox-setting-hint:focus-visible {
+    opacity: 1;
+}
+
+#st-toolbox-settings .st-toolbox-screenshot-field input[type="range"] {
+    width: 100%;
+}

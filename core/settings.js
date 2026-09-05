@@ -4,7 +4,14 @@ import { extension_settings } from '../../../../extensions.js';
 export const EXTENSION_NAME = 'st-toolbox';
 
 export const DEFAULT_SETTINGS = Object.freeze({
-    version: 1,
+    version: 2,
+    ui: {
+        sections: {
+            'qr-bar': false,
+            notifications: false,
+            screenshot: false,
+        },
+    },
     qrBar: {
         enabled: true,
         collapsed: false,
@@ -17,6 +24,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
         volume: 0.5,
         successSound: 'builtin:success',
         errorSound: 'builtin:error',
+    },
+    screenshot: {
+        enabled: true,
+        showMessageButtons: true,
+        showMultiSelectButton: true,
+        scale: 2,
+        format: 'png',
+        quality: 0.92,
+        backgroundMode: 'current',
+        neighborCount: 4,
     },
 });
 
@@ -41,6 +58,9 @@ function applyDefaults(target, defaults) {
 
 function normalizeSettings(settings) {
     settings.version = DEFAULT_SETTINGS.version;
+    for (const key of Object.keys(DEFAULT_SETTINGS.ui.sections)) {
+        settings.ui.sections[key] = Boolean(settings.ui.sections[key]);
+    }
     settings.qrBar.enabled = Boolean(settings.qrBar.enabled);
     settings.qrBar.collapsed = Boolean(settings.qrBar.collapsed);
 
@@ -56,6 +76,20 @@ function normalizeSettings(settings) {
     notifications.errorSound = typeof notifications.errorSound === 'string'
         ? notifications.errorSound
         : DEFAULT_SETTINGS.notifications.errorSound;
+
+    const screenshot = settings.screenshot;
+    screenshot.enabled = Boolean(screenshot.enabled);
+    screenshot.showMessageButtons = Boolean(screenshot.showMessageButtons);
+    screenshot.showMultiSelectButton = Boolean(screenshot.showMultiSelectButton);
+    screenshot.scale = Math.min(3, Math.max(1, Number(screenshot.scale) || DEFAULT_SETTINGS.screenshot.scale));
+    screenshot.format = ['png', 'jpeg', 'webp'].includes(screenshot.format)
+        ? screenshot.format
+        : DEFAULT_SETTINGS.screenshot.format;
+    screenshot.quality = Math.min(1, Math.max(0.1, Number(screenshot.quality) || DEFAULT_SETTINGS.screenshot.quality));
+    screenshot.backgroundMode = ['current', 'solid', 'transparent'].includes(screenshot.backgroundMode)
+        ? screenshot.backgroundMode
+        : DEFAULT_SETTINGS.screenshot.backgroundMode;
+    screenshot.neighborCount = Math.round(Math.min(4, Math.max(1, Number(screenshot.neighborCount) || DEFAULT_SETTINGS.screenshot.neighborCount)));
 }
 
 export function ensureSettings() {
@@ -85,6 +119,31 @@ export function ensureSettings() {
 
 export function saveToolboxSettings() {
     saveSettingsDebounced();
+}
+
+function replaceObjectInPlace(target, source) {
+    for (const key of Object.keys(target)) {
+        if (!(key in source)) delete target[key];
+    }
+    for (const [key, value] of Object.entries(source)) {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+            if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) {
+                target[key] = {};
+            }
+            replaceObjectInPlace(target[key], value);
+        } else {
+            target[key] = Array.isArray(value) ? cloneDefault(value) : value;
+        }
+    }
+}
+
+export function synchronizeSettings(stableSettings) {
+    const latest = ensureSettings();
+    if (latest !== stableSettings) {
+        replaceObjectInPlace(stableSettings, latest);
+        extension_settings[EXTENSION_NAME] = stableSettings;
+    }
+    return stableSettings;
 }
 
 function delay(milliseconds) {
@@ -145,9 +204,39 @@ function createPanel() {
     return { drawer, body };
 }
 
+function createFeatureDrawer(feature, settings) {
+    const details = document.createElement('details');
+    details.className = 'st-toolbox-feature-drawer';
+    details.dataset.feature = feature.id;
+    details.open = Boolean(settings.ui.sections[feature.id]);
+
+    const summary = document.createElement('summary');
+    summary.className = 'st-toolbox-feature-summary';
+    summary.innerHTML = `<span>${feature.title}</span><i class="fa-solid fa-chevron-down" aria-hidden="true"></i>`;
+
+    const content = document.createElement('div');
+    content.className = 'st-toolbox-feature-content';
+
+    details.addEventListener('toggle', () => {
+        settings.ui.sections[feature.id] = details.open;
+        saveToolboxSettings();
+    });
+    details.append(summary, content);
+    return { details, content };
+}
+
+function syncFeatureDrawerStates(settings) {
+    document.querySelectorAll('#st-toolbox-settings .st-toolbox-feature-drawer').forEach(details => {
+        const featureId = details.dataset.feature;
+        const shouldOpen = Boolean(settings.ui.sections[featureId]);
+        if (details.open !== shouldOpen) details.open = shouldOpen;
+    });
+}
+
 export async function mountSettingsPanel(features) {
     const existing = document.getElementById('st-toolbox-settings');
     if (existing) {
+        syncFeatureDrawerStates(ensureSettings());
         return true;
     }
 
@@ -160,16 +249,19 @@ export async function mountSettingsPanel(features) {
     }
 
     const { drawer, body } = createPanel();
+    const settings = ensureSettings();
 
     for (const feature of features) {
+        const { details, content } = createFeatureDrawer(feature, settings);
+        body.appendChild(details);
         try {
-            feature.render(body);
+            feature.render(content);
         } catch (error) {
             console.error(`[st-toolbox] 设置小节渲染失败：${feature.id}`, error);
             const message = document.createElement('div');
             message.className = 'st-toolbox-help';
             message.textContent = `${feature.title}设置加载失败，请查看控制台。`;
-            body.appendChild(message);
+            content.appendChild(message);
         }
     }
 

@@ -1,7 +1,8 @@
 import { eventSource, event_types, isGenerating } from '../../../../script.js';
-import { ensureSettings, mountSettingsPanel, saveToolboxSettings } from './core/settings.js';
+import { ensureSettings, mountSettingsPanel, saveToolboxSettings, synchronizeSettings } from './core/settings.js';
 import { createQrBarFeature } from './features/qr-bar/index.js';
 import { createNotificationsFeature } from './features/notifications/index.js';
+import { createScreenshotFeature } from './features/screenshot/index.js';
 
 const LOAD_GUARD = '__stToolboxLoaded';
 
@@ -23,8 +24,10 @@ async function initialize() {
 
     const qrBar = createQrBarFeature(featureContext);
     const notifications = createNotificationsFeature(featureContext);
+    const screenshot = createScreenshotFeature(featureContext);
 
     qrBar.init();
+    screenshot.init();
 
     try {
         await notifications.init();
@@ -33,13 +36,22 @@ async function initialize() {
     }
 
     const mountPanel = () => void mountSettingsPanel([
-        { id: 'qr-bar', title: 'QR 栏', render: qrBar.renderSettings },
-        { id: 'notifications', title: '提示通知', render: notifications.renderSettings },
+        { id: 'qr-bar', title: 'QR 栏收起/展开', render: qrBar.renderSettings },
+        { id: 'notifications', title: '回复提示通知', render: notifications.renderSettings },
+        { id: 'screenshot', title: '消息截图', render: screenshot.renderSettings },
     ]);
+    const synchronize = () => {
+        synchronizeSettings(settings);
+        qrBar.syncSettings?.();
+        notifications.syncSettings?.();
+        screenshot.syncSettings?.();
+        mountPanel();
+    };
 
     mountPanel();
     eventSource.on(event_types.APP_READY, mountPanel);
-    eventSource.on(event_types.SETTINGS_LOADED, mountPanel);
+    eventSource.on(event_types.SETTINGS_LOADED, synchronize);
+    eventSource.on(event_types.EXTENSION_SETTINGS_LOADED, synchronize);
 
     console.info('[st-toolbox] 扩展已加载');
 }
