@@ -26,6 +26,23 @@ not pass `workerUrl`: this bundled build's `destroyContext()` does not terminate
 created workers, so main-thread fetching avoids leaking workers across repeated
 screenshots.
 
+## Local patch: `embedWebFont` no longer mutates page stylesheets
+
+Upstream `embedWebFont()` fetches every `@import`ed stylesheet and calls
+`styleSheet.insertRule()` on the **live document stylesheet**. In SillyTavern
+(custom fonts via `#custom-style`, themes, Google Fonts) this triggers a global
+style recalculation, font reloads and text reflow on every screenshot, which
+shifts the chat layout ("the page jumps/refreshes when a screenshot finishes")
+and accumulates duplicated rules over time.
+
+The vendored copy instead parses the imported CSS into a detached stylesheet
+(constructable `CSSStyleSheet`, falling back to a `<style>` in a document created
+by `document.implementation.createHTMLDocument()`), keeps only `@font-face`
+rules, and reads them from there. The page's own stylesheets are never modified.
+The SHA-256 of `modern-screenshot.umd.js` therefore no longer matches the value
+above; the patch is confined to the `embedWebFont` function and is marked with
+`[st-toolbox patch]`.
+
 ## modern-screenshot license
 
 MIT License

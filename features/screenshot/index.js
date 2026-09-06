@@ -518,14 +518,116 @@ function downloadBlob(blob, filename) {
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
-    link.style.display = 'none';
-    document.body.appendChild(link);
+    // 注意：不要把 link 挂到 document.body 上再 click()。
+    // 已挂载元素上的合成 click 会冒泡到 document，触发 SillyTavern 及主题/扩展
+    // （如 Moonlit Echoes 的 active-message / show-details、酒馆的 extraMesButtons 收起等）
+    // 的全局 click 处理器，导致消息布局变化、聊天区“刷新上移”。
+    // 与 html2canvas-pro 一致：在游离节点上触发 click，浏览器仍会执行下载，但事件不会冒泡到页面。
+    link.addEventListener('click', event => event.stopPropagation());
     link.click();
-    link.remove();
     setTimeout(() => {
         URL.revokeObjectURL(url);
         pendingDownloadUrls.delete(url);
     }, 30000);
+}
+
+/**
+ * 滚动位置守护。
+ * 截图过程中（包括完成后的短暂稳定期），如果 #chat 或页面发生了非用户主动触发的滚动偏移
+ * （例如主题/扩展的全局处理器改变了消息布局、焦点变化引起的重排等），立即把滚动位置拉回。
+ * 若用户在截图期间主动滚动（滚轮/触摸/键盘/拖动滚动条），则采纳新位置，不与用户对抗。
+ */
+function createScrollGuard() {
+    const chat = document.getElementById('chat');
+    const pageScroller = document.scrollingElement || document.documentElement;
+    const targets = [chat, pageScroller].filter(element => element instanceof Element);
+    const USER_INPUT_WINDOW = 800;
+    const BOTTOM_THRESHOLD = 2;
+    const snapshots = new Map();
+    let lastUserInput = Number.NEGATIVE_INFINITY;
+    let restoring = false;
+    let released = false;
+
+    const snap = element => ({
+        top: element.scrollTop,
+        left: element.scrollLeft,
+        clientHeight: element.clientHeight,
+        bottomDistance: element.scrollHeight - element.clientHeight - element.scrollTop,
+        atBottom: element.scrollHeight - element.clientHeight - element.scrollTop <= BOTTOM_THRESHOLD,
+    });
+    const adopt = () => {
+        for (const element of targets) snapshots.set(element, snap(element));
+    };
+    const restore = () => {
+        if (released || restoring) return;
+        restoring = true;
+        try {
+            for (const [element, saved] of snapshots) {
+                const maxTop = Math.max(0, element.scrollHeight - element.clientHeight);
+                let target;
+                if (saved.atBottom) {
+                    target = maxTop;
+                } else if (Math.abs(element.clientHeight - saved.clientHeight) > 1) {
+                    // 可视高度变了（例如输入框/键盘引起），与 ST 自身的补偿逻辑一致：保持距底部的距离。
+                    target = element.scrollHeight - element.clientHeight - saved.bottomDistance;
+                } else {
+                    target = saved.top;
+                }
+                target = Math.min(Math.max(0, target), maxTop);
+                if (Math.abs(element.scrollTop - target) > 1) element.scrollTop = target;
+                if (Math.abs(element.scrollLeft - saved.left) > 1) element.scrollLeft = saved.left;
+            }
+        } finally {
+            restoring = false;
+        }
+    };
+    const markUserInput = () => {
+        lastUserInput = performance.now();
+    };
+    const onScroll = () => {
+        if (released || restoring) return;
+        if (performance.now() - lastUserInput < USER_INPUT_WINDOW) {
+            adopt();
+            return;
+        }
+        restore();
+    };
+
+    const userEvents = ['wheel', 'touchstart', 'touchmove', 'keydown', 'pointerdown'];
+    adopt();
+    for (const name of userEvents) window.addEventListener(name, markUserInput, { capture: true, passive: true });
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+
+    const detach = () => {
+        if (released) return;
+        released = true;
+        for (const name of userEvents) window.removeEventListener(name, markUserInput, { capture: true });
+        window.removeEventListener('scroll', onScroll, { capture: true });
+        snapshots.clear();
+    };
+
+    return {
+        restore,
+        /** 完成后在短时间内多次校正，覆盖下载、toast、过渡动画等异步布局变化，然后解除监听。 */
+        async settleAndRelease() {
+            const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+            const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+            try {
+                restore();
+                await frame();
+                restore();
+                await frame();
+                restore();
+                for (const step of [60, 150, 300, 500]) {
+                    await wait(step);
+                    restore();
+                }
+            } finally {
+                detach();
+            }
+        },
+        release: detach,
+    };
 }
 
 export function createScreenshotFeature({ eventSource, eventTypes, settings, saveSettings }) {
@@ -839,6 +941,8 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
 
         busy = true;
         closeRangeMenu();
+        // 在任何 DOM/样式改动之前先记录滚动位置，全程守护直到截图结束并稳定。
+        const scrollGuard = createScrollGuard();
         const triggerIcon = trigger?.querySelector('i');
         const iconWasSpinning = triggerIcon?.classList.contains('fa-spin') || false;
         const previousAriaBusy = trigger?.getAttribute('aria-busy');
@@ -911,6 +1015,8 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
                 trigger.classList.remove('st-toolbox-screenshot-loading');
             }
             busy = false;
+            // 完成后继续守护一小段时间（覆盖下载、toast、主题过渡动画等），然后自动解除。
+            void scrollGuard.settleAndRelease();
         }
     }
 
@@ -960,6 +1066,9 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
 
         const startPress = event => {
             if (event.type === 'pointerdown' && event.button !== 0) return;
+            // 阻止 pointerdown 的默认行为：不让截图按钮抢走焦点（例如从 #send_textarea 移走），
+            // 避免焦点变化引起输入框/软键盘/布局变化进而导致聊天区滚动。click 事件不受影响。
+            event.preventDefault();
             longPressed = false;
             const startX = event.clientX;
             const startY = event.clientY;

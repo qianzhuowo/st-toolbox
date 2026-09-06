@@ -1347,11 +1347,32 @@
           return false;
         }
       });
+      // [st-toolbox patch] 原版会把 @import 下载到的 CSS 通过 styleSheet.insertRule 直接插入页面的
+      // 实时样式表，导致全局样式重算 / 字体重新加载 / 文字重排，页面布局发生变化（“截图完成时界面上移”），
+      // 而且每次截图都会重复插入。这里改为把这些规则放进一个不挂载到文档的临时样式表，只用于读取 @font-face。
+      const detachedSheets = [];
+      const createDetachedSheet = () => {
+        try {
+          if (typeof CSSStyleSheet === "function" && "replaceSync" in CSSStyleSheet.prototype) {
+            return new CSSStyleSheet();
+          }
+        } catch (error) {
+          context.log.warn("Constructable stylesheet unavailable, falling back to detached document", error);
+        }
+        try {
+          const doc = ownerDocument.implementation.createHTMLDocument("");
+          const style = doc.createElement("style");
+          doc.head.appendChild(style);
+          return style.sheet;
+        } catch (error) {
+          context.log.warn("Failed to create detached stylesheet", error);
+          return null;
+        }
+      };
       await Promise.all(
         styleSheets.flatMap((styleSheet) => {
-          return Array.from(styleSheet.cssRules).map(async (cssRule, index) => {
+          return Array.from(styleSheet.cssRules).map(async (cssRule) => {
             if (isCSSImportRule(cssRule)) {
-              let importIndex = index + 1;
               const baseUrl = cssRule.href;
               let cssText = "";
               try {
@@ -1363,25 +1384,32 @@
               } catch (error) {
                 context.log.warn(`Error fetch remote css import from ${baseUrl}`, error);
               }
+              if (!cssText)
+                return;
               const replacedCssText = cssText.replace(
                 URL_RE,
                 (raw, quotation, url) => raw.replace(url, resolveUrl(url, baseUrl))
               );
+              const sheet = createDetachedSheet();
+              if (!sheet)
+                return;
               for (const rule of parseCss(replacedCssText)) {
+                // 只需要 @font-face；嵌套 @import 不处理（临时样式表也不允许）。
+                if (!/^\s*@font-face/i.test(rule))
+                  continue;
                 try {
-                  styleSheet.insertRule(
-                    rule,
-                    rule.startsWith("@import") ? importIndex += 1 : styleSheet.cssRules.length
-                  );
+                  sheet.insertRule(rule, sheet.cssRules.length);
                 } catch (error) {
                   context.log.warn("Error inserting rule from remote css import", { rule, error });
                 }
               }
+              if (sheet.cssRules.length)
+                detachedSheets.push(sheet);
             }
           });
         })
       );
-      const cssRules = styleSheets.flatMap((styleSheet) => Array.from(styleSheet.cssRules));
+      const cssRules = [...styleSheets, ...detachedSheets].flatMap((styleSheet) => Array.from(styleSheet.cssRules));
       cssRules.filter((cssRule) => isCssFontFaceRule(cssRule) && hasCssUrl(cssRule.style.getPropertyValue("src")) && splitFontFamily(cssRule.style.getPropertyValue("font-family"))?.some((val) => fontFamilies.has(val))).forEach((value) => {
         const rule = value;
         const cssText = fontCssTexts.get(rule.cssText);
