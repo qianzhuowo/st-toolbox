@@ -18,3 +18,27 @@
 #st-toolbox-settings .st-toolbox-warning {
     color: var(--warning-color, #e8a849);
 }
+
+#st-toolbox-settings .st-toolbox-flash-icon-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 22%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 85%, transparent);
+}
+
+#st-toolbox-settings .st-toolbox-flash-icon-preview img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    image-rendering: auto;
+}
+
+#st-toolbox-settings .st-toolbox-flash-icon-name {
+    flex: 1 1 120px;
+    min-width: 0;
+    font-size: 0.9em;
+    opacity: 0.8;
+}

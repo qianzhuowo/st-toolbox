@@ -24,6 +24,79 @@ const BUILTIN_SOUNDS = {
 
 const IGNORED_GENERATION_TYPES = new Set(['quiet', 'impersonate']);
 const IGNORED_MESSAGE_TYPES = new Set(['first_message', 'command', 'extension']);
+const ICON_BASE_PATH = '/scripts/extensions/third-party/st-toolbox/features/notifications/icons';
+const BUILTIN_FLASH_ICONS = [`${ICON_BASE_PATH}/flash-1.ico`, `${ICON_BASE_PATH}/flash-2.ico`];
+const FLASH_ICON_SIZE = 64;
+const FLASH_ICON_MAX_BYTES = 96 * 1024;
+const FLASH_ICON_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+
+/** 读取页面当前的 favicon <link>（没有则创建）。 */
+function getFaviconLink(create = false) {
+    let link = document.querySelector("link[rel='icon']") || document.querySelector("link[rel='shortcut icon']");
+    if (!link && create) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+    }
+    return link;
+}
+
+function setFavicon(href) {
+    const link = getFaviconLink(true);
+    if (!link) return;
+    // 非 data URL 加上 cache buster，否则部分浏览器在同一地址往返时不会重绘标签页图标。
+    link.href = href.startsWith('data:') ? href : `${href}${href.includes('?') ? '&' : '?'}v=${Date.now()}`;
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('读取文件失败。'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function loadImageElement(src) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('图片无法解码。'));
+        image.src = src;
+    });
+}
+
+/**
+ * 把用户上传的图片归一化为 64×64 的 PNG data URL，保证体积小、可直接存进设置。
+ * 浏览器无法解码（如某些 ICO）时，若原文件足够小则直接使用原始 data URL。
+ */
+async function normalizeFlashIcon(file) {
+    const rawDataUrl = await readFileAsDataUrl(file);
+    try {
+        const image = await loadImageElement(rawDataUrl);
+        const canvas = document.createElement('canvas');
+        canvas.width = FLASH_ICON_SIZE;
+        canvas.height = FLASH_ICON_SIZE;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('无法创建 Canvas。');
+        const width = image.naturalWidth || FLASH_ICON_SIZE;
+        const height = image.naturalHeight || FLASH_ICON_SIZE;
+        const ratio = Math.min(FLASH_ICON_SIZE / width, FLASH_ICON_SIZE / height);
+        const drawWidth = Math.max(1, Math.round(width * ratio));
+        const drawHeight = Math.max(1, Math.round(height * ratio));
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(image, (FLASH_ICON_SIZE - drawWidth) / 2, (FLASH_ICON_SIZE - drawHeight) / 2, drawWidth, drawHeight);
+        const normalized = canvas.toDataURL('image/png');
+        canvas.width = 1;
+        canvas.height = 1;
+        if (normalized.length <= FLASH_ICON_MAX_BYTES) return normalized;
+    } catch (error) {
+        console.debug('[st-toolbox] 图标无法用 Canvas 归一化，尝试直接使用原文件：', error);
+    }
+    if (rawDataUrl.startsWith('data:image/') && rawDataUrl.length <= FLASH_ICON_MAX_BYTES) return rawDataUrl;
+    throw new Error('图标处理后仍超过 96 KB，请换一张更小的图片。');
+}
 
 function requestToPromise(request) {
     return new Promise((resolve, reject) => {
@@ -70,6 +143,8 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
     let flashTimer = 0;
     let titleBeforeFlash = '';
     let lastFlashedTitle = '';
+    let faviconBeforeFlash = '';
+    let lastFlashedFavicon = '';
     let nextSessionId = 0;
     let nextLegId = 0;
     let currentSession = null;
@@ -337,6 +412,25 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
         }
     }
 
+    function getFlashIcons() {
+        // 自定义图标：自定义 ↔ 原始 favicon 交替；内置：两张默认图标交替（与 vertin-tips 一致）。
+        if (featureSettings.flashIcon) {
+            return [featureSettings.flashIcon, faviconBeforeFlash || getFaviconLink()?.href || '/favicon.ico'];
+        }
+        return BUILTIN_FLASH_ICONS;
+    }
+
+    function restoreFavicon() {
+        if (!faviconBeforeFlash) return;
+        const link = getFaviconLink();
+        // 只在 favicon 仍是我们设置的那个时才恢复，避免覆盖其它插件的修改。
+        if (link && (!lastFlashedFavicon || link.href === lastFlashedFavicon)) {
+            link.href = faviconBeforeFlash;
+        }
+        faviconBeforeFlash = '';
+        lastFlashedFavicon = '';
+    }
+
     function stopFlashing() {
         if (!flashTimer) {
             return;
@@ -348,6 +442,7 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
         }
         titleBeforeFlash = '';
         lastFlashedTitle = '';
+        restoreFavicon();
     }
 
     function startFlashing(kind) {
@@ -357,6 +452,11 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
 
         stopFlashing();
         titleBeforeFlash = document.title;
+        const useIcon = featureSettings.flashIconEnabled;
+        if (useIcon) {
+            faviconBeforeFlash = getFaviconLink()?.href || '/favicon.ico';
+        }
+        const icons = useIcon ? getFlashIcons() : null;
         const alertTitle = kind === 'success' ? '【回复完成】' : '【生成失败】';
         let showAlert = true;
         const updateTitle = () => {
@@ -365,10 +465,15 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
                 flashTimer = 0;
                 titleBeforeFlash = '';
                 lastFlashedTitle = '';
+                restoreFavicon();
                 return;
             }
             lastFlashedTitle = showAlert ? alertTitle : titleBeforeFlash;
             document.title = lastFlashedTitle;
+            if (icons) {
+                setFavicon(icons[showAlert ? 0 : 1]);
+                lastFlashedFavicon = getFaviconLink()?.href || '';
+            }
             showAlert = !showAlert;
         };
 
@@ -790,6 +895,7 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
         controls.enabled.checked = featureSettings.enabled;
         controls.soundEnabled.checked = featureSettings.soundEnabled;
         controls.flashEnabled.checked = featureSettings.flashEnabled;
+        controls.flashIconEnabled.checked = featureSettings.flashIconEnabled;
         controls.onlyWhenUnfocused.checked = featureSettings.onlyWhenUnfocused;
         controls.volume.value = String(Math.round(featureSettings.volume * 100));
         controls.volumeValue.textContent = controls.volume.value;
@@ -798,6 +904,11 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
         const customAudioLimitReached = customAudios.success.length + customAudios.error.length >= MAX_CUSTOM_AUDIO_FILES;
         controls.soundEnabled.disabled = !featureSettings.enabled;
         controls.flashEnabled.disabled = !featureSettings.enabled;
+        const flashIconControlsEnabled = featureSettings.enabled && featureSettings.flashEnabled;
+        controls.flashIconEnabled.disabled = !flashIconControlsEnabled;
+        controls.uploadFlashIcon.disabled = !flashIconControlsEnabled || !featureSettings.flashIconEnabled;
+        controls.resetFlashIcon.disabled = !flashIconControlsEnabled || !featureSettings.flashIconEnabled;
+        updateFlashIconPreview();
         controls.onlyWhenUnfocused.disabled = !featureSettings.enabled;
         controls.successSelect.disabled = !soundControlsEnabled;
         controls.errorSelect.disabled = !soundControlsEnabled;
@@ -877,6 +988,46 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
         }
     }
 
+    function updateFlashIconPreview() {
+        if (!controls) return;
+        const custom = featureSettings.flashIcon;
+        const original = faviconBeforeFlash || getFaviconLink()?.href || '/favicon.ico';
+        controls.flashIconA.src = custom || BUILTIN_FLASH_ICONS[0];
+        controls.flashIconB.src = custom ? original : BUILTIN_FLASH_ICONS[1];
+        controls.flashIconName.textContent = custom ? '自定义图标 ↔ 原 favicon' : '默认图标';
+        controls.resetFlashIcon.hidden = !custom;
+    }
+
+    function validateIconFile(file) {
+        if (!file) return '未选择文件。';
+        const supportedExtension = /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/i.test(file.name || '');
+        if (!file.type?.startsWith('image/') && !supportedExtension) {
+            return '请选择图片文件（png、jpg、gif、webp、svg 或 ico）。';
+        }
+        if (file.size > FLASH_ICON_MAX_UPLOAD_BYTES) {
+            return '图标文件不能超过 2 MB。';
+        }
+        return '';
+    }
+
+    async function handleFlashIconUpload(file) {
+        const validationError = validateIconFile(file);
+        if (validationError) {
+            showToast('error', validationError);
+            return;
+        }
+        try {
+            featureSettings.flashIcon = await normalizeFlashIcon(file);
+            saveSettings();
+            stopFlashing();
+            updateControls();
+            showToast('success', '闪烁图标已更新。');
+        } catch (error) {
+            console.error('[st-toolbox] 保存闪烁图标失败：', error);
+            showToast('error', error?.message || '保存闪烁图标失败。');
+        }
+    }
+
     function bindSettingsEvents(section) {
         controls.enabled.addEventListener('change', () => {
             featureSettings.enabled = controls.enabled.checked;
@@ -902,6 +1053,24 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
             }
             updateControls();
             saveSettings();
+        });
+        controls.flashIconEnabled.addEventListener('change', () => {
+            featureSettings.flashIconEnabled = controls.flashIconEnabled.checked;
+            stopFlashing();
+            updateControls();
+            saveSettings();
+        });
+        controls.uploadFlashIcon.addEventListener('click', () => {
+            controls.flashIconFile.value = '';
+            controls.flashIconFile.click();
+        });
+        controls.flashIconFile.addEventListener('change', () => void handleFlashIconUpload(controls.flashIconFile.files?.[0]));
+        controls.resetFlashIcon.addEventListener('click', () => {
+            featureSettings.flashIcon = '';
+            saveSettings();
+            stopFlashing();
+            updateControls();
+            showToast('success', '已恢复默认闪烁图标。');
         });
         controls.onlyWhenUnfocused.addEventListener('change', () => {
             featureSettings.onlyWhenUnfocused = controls.onlyWhenUnfocused.checked;
@@ -999,11 +1168,27 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
                     <span>标签页闪烁</span>
                 </label>
                 <label class="checkbox_label">
+                    <input id="st-toolbox-flash-icon-enabled" type="checkbox">
+                    <span>闪烁时切换标签页图标</span>
+                </label>
+                <label class="checkbox_label">
                     <input id="st-toolbox-background-only" type="checkbox">
                     <span>仅失焦/后台时播放声音</span>
                 </label>
             </div>
             <p class="st-toolbox-help">正常可见回复完成且生成链持续空闲后播放成功音；流式失败或进入空闲后持续没有有效回复时播放错误音；手动停止不会播放错误音。群聊整轮只提醒一次。若 SillyTavern 自带 Message Sound 也已启用，两套声音会叠加。</p>
+            <label>闪烁图标</label>
+            <div class="st-toolbox-row st-toolbox-flash-icon-row">
+                <span class="st-toolbox-flash-icon-preview" title="闪烁时交替显示的两张图标">
+                    <img id="st-toolbox-flash-icon-a" alt="闪烁图标 1">
+                    <img id="st-toolbox-flash-icon-b" alt="闪烁图标 2">
+                </span>
+                <span id="st-toolbox-flash-icon-name" class="st-toolbox-flash-icon-name"></span>
+                <button id="st-toolbox-upload-flash-icon" class="menu_button st-toolbox-icon-button" type="button" title="上传自定义图标"><i class="fa-solid fa-upload"></i></button>
+                <button id="st-toolbox-reset-flash-icon" class="menu_button st-toolbox-icon-button" type="button" title="恢复默认图标" hidden><i class="fa-solid fa-rotate-left"></i></button>
+                <input id="st-toolbox-flash-icon-file" type="file" accept="image/*,.ico" hidden>
+            </div>
+            <p class="st-toolbox-help">默认使用 vertin-tips 的两张图标交替闪烁；上传自定义图标后，会与页面原有 favicon 交替。图片会被缩放为 64×64 PNG 存入设置（不超过 96 KB），支持 png/jpg/webp/gif/svg/ico。</p>
             <label for="st-toolbox-success-sound">成功提示音</label>
             <div class="st-toolbox-row">
                 <select id="st-toolbox-success-sound" class="text_pole"></select>
@@ -1032,6 +1217,13 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
             enabled: find('#st-toolbox-notifications-enabled'),
             soundEnabled: find('#st-toolbox-sound-enabled'),
             flashEnabled: find('#st-toolbox-flash-enabled'),
+            flashIconEnabled: find('#st-toolbox-flash-icon-enabled'),
+            flashIconA: find('#st-toolbox-flash-icon-a'),
+            flashIconB: find('#st-toolbox-flash-icon-b'),
+            flashIconName: find('#st-toolbox-flash-icon-name'),
+            uploadFlashIcon: find('#st-toolbox-upload-flash-icon'),
+            resetFlashIcon: find('#st-toolbox-reset-flash-icon'),
+            flashIconFile: find('#st-toolbox-flash-icon-file'),
             onlyWhenUnfocused: find('#st-toolbox-background-only'),
             successSelect: find('#st-toolbox-success-sound'),
             errorSelect: find('#st-toolbox-error-sound'),

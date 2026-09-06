@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
         enabled: true,
         soundEnabled: true,
         flashEnabled: true,
+        flashIconEnabled: true,
+        flashIcon: '',
         onlyWhenUnfocused: false,
         volume: 0.5,
         successSound: 'builtin:success',
@@ -69,6 +71,10 @@ function normalizeSettings(settings) {
     notifications.enabled = Boolean(notifications.enabled);
     notifications.soundEnabled = Boolean(notifications.soundEnabled);
     notifications.flashEnabled = Boolean(notifications.flashEnabled);
+    notifications.flashIconEnabled = Boolean(notifications.flashIconEnabled);
+    notifications.flashIcon = typeof notifications.flashIcon === 'string' && notifications.flashIcon.startsWith('data:image/')
+        ? notifications.flashIcon
+        : '';
     notifications.onlyWhenUnfocused = Boolean(notifications.onlyWhenUnfocused);
     notifications.volume = Math.min(1, Math.max(0, Number(notifications.volume) || 0));
     notifications.successSound = typeof notifications.successSound === 'string'
