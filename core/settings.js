@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     screenshot: {
         enabled: true,
         showMessageButtons: true,
+        buttonPlacement: 'inline',
         showMultiSelectButton: true,
         scale: 2,
         format: 'png',
@@ -80,6 +81,9 @@ function normalizeSettings(settings) {
     const screenshot = settings.screenshot;
     screenshot.enabled = Boolean(screenshot.enabled);
     screenshot.showMessageButtons = Boolean(screenshot.showMessageButtons);
+    screenshot.buttonPlacement = ['inline', 'extra'].includes(screenshot.buttonPlacement)
+        ? screenshot.buttonPlacement
+        : DEFAULT_SETTINGS.screenshot.buttonPlacement;
     screenshot.showMultiSelectButton = Boolean(screenshot.showMultiSelectButton);
     screenshot.scale = Math.min(3, Math.max(1, Number(screenshot.scale) || DEFAULT_SETTINGS.screenshot.scale));
     screenshot.format = ['png', 'jpeg', 'webp'].includes(screenshot.format)

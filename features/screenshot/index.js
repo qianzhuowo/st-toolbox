@@ -13,7 +13,229 @@ const MAX_CANVAS_DIMENSION = 16000;
 const MAX_CANVAS_AREA = 16_000_000;
 const MAX_BACKGROUND_AREA = 8_000_000;
 const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const LIBRARY_TIMEOUT = 10000;
+const LAZY_MEDIA_TIMEOUT = 8000;
+const RESOURCE_CACHE_LIMIT_BYTES = 64 * 1024 * 1024;
+const FONT_CACHE_LIMIT = 64;
+const DOWNSCALE_THRESHOLD = 0.8;
 const pendingDownloadUrls = new Set();
+
+// 跨次截图缓存：图片/背景 data URL（LRU，按字节数限制）、字体 @font-face cssText、背景底图。
+const resourceCache = new Map();
+let resourceCacheBytes = 0;
+const fontCssTextCache = new Map();
+let backgroundCache = null;
+let webpEncodeSupport = null;
+
+function cacheGet(key) {
+    const entry = resourceCache.get(key);
+    if (!entry) return null;
+    resourceCache.delete(key);
+    resourceCache.set(key, entry);
+    return entry.value;
+}
+
+function cacheSet(key, value) {
+    if (typeof value !== 'string') return;
+    const size = value.length;
+    if (size > RESOURCE_CACHE_LIMIT_BYTES / 4) return;
+    const existing = resourceCache.get(key);
+    if (existing) {
+        resourceCacheBytes -= existing.size;
+        resourceCache.delete(key);
+    }
+    resourceCache.set(key, { value, size });
+    resourceCacheBytes += size;
+    while (resourceCacheBytes > RESOURCE_CACHE_LIMIT_BYTES && resourceCache.size) {
+        const [oldestKey, oldest] = resourceCache.entries().next().value;
+        resourceCache.delete(oldestKey);
+        resourceCacheBytes -= oldest.size;
+    }
+}
+
+function rememberFontCss(map) {
+    for (const [key, value] of map) {
+        if (fontCssTextCache.has(key)) fontCssTextCache.delete(key);
+        fontCssTextCache.set(key, value);
+    }
+    while (fontCssTextCache.size > FONT_CACHE_LIMIT) {
+        fontCssTextCache.delete(fontCssTextCache.keys().next().value);
+    }
+}
+
+function resourceKey(src) {
+    const value = String(src || '');
+    if (value.startsWith('data:')) {
+        return `data:${value.length}:${value.slice(0, 96)}:${value.slice(-96)}`;
+    }
+    try {
+        return new URL(value, location.href).href;
+    } catch {
+        return value;
+    }
+}
+
+function canEncodeWebp() {
+    if (webpEncodeSupport === null) {
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            webpEncodeSupport = canvas.toDataURL('image/webp').startsWith('data:image/webp');
+        } catch {
+            webpEncodeSupport = false;
+        }
+    }
+    return webpEncodeSupport;
+}
+
+/**
+ * 把图片缩小到截图实际需要的像素尺寸（显示尺寸 × 截图倍率）。
+ * 原图往往远大于显示尺寸（如 1024×1536 的插图只显示 400px 宽），缩小后 SVG 体积和栅格化开销都大幅下降。
+ * 返回 data URL；不需要/不能缩小时返回 null。
+ */
+async function downscaleImageBlob(blob, need, lossless) {
+    if (!blob || !need || !blob.type.startsWith('image/')) return null;
+    if (['image/gif', 'image/svg+xml', 'image/apng'].includes(blob.type)) return null;
+    if (typeof createImageBitmap !== 'function') return null;
+    let bitmap = null;
+    try {
+        bitmap = await createImageBitmap(blob);
+        const ratio = Math.max(need.width / bitmap.width, need.height / bitmap.height);
+        if (!Number.isFinite(ratio) || ratio >= DOWNSCALE_THRESHOLD) return null;
+        const width = Math.max(1, Math.ceil(bitmap.width * ratio));
+        const height = Math.max(1, Math.ceil(bitmap.height * ratio));
+        const canvas = createCanvas(width, height);
+        try {
+            const context = canvas.getContext('2d');
+            if (!context) return null;
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+            context.drawImage(bitmap, 0, 0, width, height);
+            let type = 'image/png';
+            let quality;
+            if (!lossless) {
+                if (canEncodeWebp()) {
+                    type = 'image/webp';
+                    quality = 0.92;
+                } else if (blob.type === 'image/jpeg') {
+                    type = 'image/jpeg';
+                    quality = 0.92;
+                }
+            }
+            return canvas.toDataURL(type, quality);
+        } finally {
+            releaseCanvas(canvas);
+        }
+    } catch (error) {
+        console.debug('[st-toolbox] 图片缩放失败，使用原图：', error);
+        return null;
+    } finally {
+        bitmap?.close?.();
+    }
+}
+
+/** 统计待截图元素内每张图片在最终画布上需要的像素尺寸。 */
+function collectImageBudget(elements, scale) {
+    const budget = new Map();
+    for (const element of elements) {
+        for (const image of element.querySelectorAll('img')) {
+            const src = image.currentSrc || image.src;
+            if (!src) continue;
+            const rect = image.getBoundingClientRect();
+            if (!(rect.width > 0) || !(rect.height > 0)) continue;
+            const key = resourceKey(src);
+            const need = {
+                width: Math.ceil(rect.width * scale),
+                height: Math.ceil(rect.height * scale),
+            };
+            const existing = budget.get(key);
+            if (existing) {
+                existing.width = Math.max(existing.width, need.width);
+                existing.height = Math.max(existing.height, need.height);
+            } else {
+                budget.set(key, need);
+            }
+        }
+    }
+    return budget;
+}
+
+function budgetCacheKey(key, need, lossless) {
+    return need ? `${key}@${need.width}x${need.height}${lossless ? ':L' : ''}` : key;
+}
+
+/**
+ * 克隆阶段处理 data: URL 图片（例如 LittleWhiteBox 生成的 base64 PNG）：
+ * 库对 data: 图片不走 fetchFn，这里在克隆节点上直接替换为缩小后的版本。
+ */
+async function shrinkClonedDataImage(cloned, task) {
+    if (!(cloned instanceof HTMLImageElement)) return;
+    const src = cloned.getAttribute('src') || '';
+    if (!src.startsWith('data:image/')) return;
+    const key = resourceKey(src);
+    const need = task.imageBudget?.get(key);
+    if (!need) return;
+    const cacheKey = budgetCacheKey(key, need, task.lossless);
+    let result = cacheGet(cacheKey);
+    if (!result) {
+        try {
+            const blob = await (await fetch(src)).blob();
+            result = await downscaleImageBlob(blob, need, task.lossless);
+        } catch (error) {
+            console.debug('[st-toolbox] data 图片缩放失败：', error);
+        }
+        if (!result) return;
+        cacheSet(cacheKey, result);
+    }
+    cloned.src = result;
+    cloned.srcset = '';
+}
+
+/**
+ * 截图前强制加载目标元素内的懒加载图片（loading="lazy"），并等待它们完成，
+ * 这样后续测量的尺寸才是包含图片的真实高度（否则底部会被裁掉），也避免库内部等待 load 直到超时。
+ * 返回一个恢复函数和仍未加载的图片数。
+ */
+async function preloadLazyMedia(elements, assertActive, timeout = LAZY_MEDIA_TIMEOUT) {
+    const images = elements.flatMap(element => Array.from(element.querySelectorAll('img')));
+    const restore = [];
+    const pending = [];
+    for (const image of images) {
+        if (image.loading === 'lazy') {
+            image.loading = 'eager';
+            restore.push(image);
+        }
+        if (image.complete || !(image.currentSrc || image.getAttribute('src'))) continue;
+        pending.push(new Promise(resolve => {
+            const done = () => {
+                image.removeEventListener('load', done);
+                image.removeEventListener('error', done);
+                resolve();
+            };
+            image.addEventListener('load', done);
+            image.addEventListener('error', done);
+        }));
+    }
+    const restoreLoading = () => {
+        for (const image of restore) image.loading = 'lazy';
+    };
+    if (pending.length) {
+        const started = performance.now();
+        let finished = false;
+        const loaded = Promise.allSettled(pending).then(() => { finished = true; });
+        while (!finished && performance.now() - started < timeout) {
+            assertActive?.();
+            await Promise.race([loaded, new Promise(resolve => setTimeout(resolve, 100))]);
+        }
+        await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+    const unloaded = images.filter(image => !image.complete || (image.naturalWidth === 0 && (image.currentSrc || image.getAttribute('src')))).length;
+    const placeholders = elements.reduce((sum, element) => sum + element.querySelectorAll(
+        '[data-xb-draw-chat-image="1"]:not([data-loaded="1"]), .xb-nd-img.busy',
+    ).length, 0);
+    return { restoreLoading, unloaded: unloaded + placeholders };
+}
 
 function showToast(level, message) {
     const method = globalThis.toastr?.[level];
@@ -57,9 +279,17 @@ function blobToDataUrl(blob) {
     });
 }
 
-function createResourceFetcher(failures, assertActive) {
+function createResourceFetcher(task) {
+    const { failures, assertActive } = task;
     return async rawUrl => {
-        if (String(rawUrl).startsWith('data:')) return rawUrl;
+        const raw = String(rawUrl);
+        if (raw.startsWith('data:')) return raw;
+        const key = resourceKey(raw);
+        const need = task.imageBudget?.get(key);
+        const cacheKey = budgetCacheKey(key, need, task.lossless);
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached;
+
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort('截图资源加载超时'), 15000);
         const activeCheck = setInterval(() => {
@@ -70,12 +300,16 @@ function createResourceFetcher(failures, assertActive) {
             }
         }, 250);
         try {
-            const response = await fetch(rawUrl, { credentials: 'same-origin', signal: controller.signal });
+            const response = await fetch(raw, { credentials: 'same-origin', signal: controller.signal });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await blobToDataUrl(await response.blob());
+            const blob = await response.blob();
+            let result = need ? await downscaleImageBlob(blob, need, task.lossless) : null;
+            if (!result) result = await blobToDataUrl(blob);
+            cacheSet(cacheKey, result);
+            return result;
         } catch (error) {
             try {
-                failures.add(new URL(rawUrl, location.href).origin);
+                failures.add(new URL(raw, location.href).origin);
             } catch {
                 failures.add('未知来源');
             }
@@ -358,42 +592,90 @@ async function renderViewportBackground(library, scale, task) {
     try {
     const background = getActiveBackgroundElement();
     if (background) {
+        const backgroundStyle = getComputedStyle(background);
+        const cacheKey = JSON.stringify({
+            id: background.id,
+            image: backgroundStyle.backgroundImage,
+            size: backgroundStyle.backgroundSize,
+            position: backgroundStyle.backgroundPosition,
+            opacity: backgroundStyle.opacity,
+            filter: backgroundStyle.filter,
+            color: getOpaqueThemeColor(),
+            width: geometry.viewportWidth,
+            height: geometry.viewportHeight,
+            scale,
+        });
         let rendered = false;
-        try {
-            const backgroundCanvas = await library.domToCanvas(background, {
-                scale,
-                style: {
-                    position: 'relative',
-                    inset: 'auto',
-                    left: '0',
-                    top: '0',
-                    width: `${geometry.viewportWidth}px`,
-                    height: `${geometry.viewportHeight}px`,
-                    margin: '0',
-                    zIndex: '0',
-                    transform: 'none',
-                },
-                fetchFn: task.fetchFn,
-            });
+        // 跨次截图复用背景底图（以压缩位图形式缓存，内存开销小），避免每次重新栅格化整屏背景。
+        if (backgroundCache?.key === cacheKey && backgroundCache.blob) {
             try {
-                task.assertActive();
-                if (canvasHasVisiblePixels(backgroundCanvas)) {
-                    viewport.getContext('2d').drawImage(backgroundCanvas, 0, 0, viewport.width, viewport.height);
+                const bitmap = await createImageBitmap(backgroundCache.blob);
+                try {
+                    task.assertActive();
+                    viewport.getContext('2d').drawImage(bitmap, 0, 0, viewport.width, viewport.height);
                     rendered = true;
+                } finally {
+                    bitmap.close?.();
                 }
-            } finally {
-                releaseCanvas(backgroundCanvas);
-            }
-        } catch (error) {
-            task.assertActive();
-            console.warn('[st-toolbox] DOM 背景渲染失败，将使用图片降级方案：', error);
-        }
-        if (!rendered) {
-            try {
-                await drawBackgroundImageFallback(viewport, background, scale, task.assertActive);
             } catch (error) {
                 task.assertActive();
-                console.warn('[st-toolbox] 背景图片降级绘制失败，将保留不透明主题底色：', error);
+                backgroundCache = null;
+                console.debug('[st-toolbox] 背景缓存读取失败，将重新渲染：', error);
+            }
+        }
+        if (!rendered) {
+            const backgroundUrl = extractFirstBackgroundUrl(backgroundStyle.backgroundImage);
+            if (backgroundUrl && task.imageBudget) {
+                task.imageBudget.set(resourceKey(backgroundUrl), {
+                    width: Math.ceil(geometry.viewportWidth * scale),
+                    height: Math.ceil(geometry.viewportHeight * scale),
+                });
+            }
+            try {
+                const backgroundCanvas = await library.domToCanvas(background, {
+                    scale,
+                    timeout: LIBRARY_TIMEOUT,
+                    style: {
+                        position: 'relative',
+                        inset: 'auto',
+                        left: '0',
+                        top: '0',
+                        width: `${geometry.viewportWidth}px`,
+                        height: `${geometry.viewportHeight}px`,
+                        margin: '0',
+                        zIndex: '0',
+                        transform: 'none',
+                    },
+                    fetchFn: task.fetchFn,
+                });
+                try {
+                    task.assertActive();
+                    if (canvasHasVisiblePixels(backgroundCanvas)) {
+                        viewport.getContext('2d').drawImage(backgroundCanvas, 0, 0, viewport.width, viewport.height);
+                        rendered = true;
+                    }
+                } finally {
+                    releaseCanvas(backgroundCanvas);
+                }
+            } catch (error) {
+                task.assertActive();
+                console.warn('[st-toolbox] DOM 背景渲染失败，将使用图片降级方案：', error);
+            }
+            if (!rendered) {
+                try {
+                    rendered = await drawBackgroundImageFallback(viewport, background, scale, task.assertActive);
+                } catch (error) {
+                    task.assertActive();
+                    console.warn('[st-toolbox] 背景图片降级绘制失败，将保留不透明主题底色：', error);
+                }
+            }
+            if (rendered) {
+                try {
+                    const blob = await canvasToBlob(viewport, canEncodeWebp() ? 'image/webp' : 'image/jpeg', 0.92);
+                    backgroundCache = { key: cacheKey, blob };
+                } catch (error) {
+                    console.debug('[st-toolbox] 背景缓存写入失败：', error);
+                }
             }
         }
     }
@@ -472,17 +754,30 @@ async function createMessageContext(library, element, scale, task) {
     task.assertActive();
     const context = await library.createContext(element, {
         scale,
+        timeout: LIBRARY_TIMEOUT,
         autoDestruct: false,
         style: { margin: '0' },
         fetchFn: task.fetchFn,
+        onCloneEachNode: cloned => shrinkClonedDataImage(cloned, task),
         onCreateForeignObjectSvg: addSvgCaptureStyles,
     });
     try {
         task.assertActive();
+        // 复用之前截图已经内联好的 @font-face（字体文件往往几 MB，重复下载转 base64 是主要耗时之一）。
+        for (const [key, value] of fontCssTextCache) context.fontCssTexts.set(key, value);
         return context;
     } catch (error) {
         library.destroyContext(context);
         throw error;
+    }
+}
+
+function destroyMessageContext(library, context) {
+    if (!context) return;
+    try {
+        if (context.fontCssTexts?.size) rememberFontCss(context.fontCssTexts);
+    } finally {
+        library.destroyContext(context);
     }
 }
 
@@ -921,7 +1216,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         return { blob, extension: captureSettings.format === 'jpeg' ? 'jpg' : captureSettings.format };
         } finally {
             try {
-                if (messageContext) library.destroyContext(messageContext);
+                destroyMessageContext(library, messageContext);
             } finally {
                 for (const canvas of allocatedCanvases) releaseCanvas(canvas);
             }
@@ -943,7 +1238,8 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         closeRangeMenu();
         // 在任何 DOM/样式改动之前先记录滚动位置，全程守护直到截图结束并稳定。
         const scrollGuard = createScrollGuard();
-        const triggerIcon = trigger?.querySelector('i');
+        // 消息按钮本身就是图标（FA 类在 .mes_button 上）；多选入口按钮则内嵌 <i>。
+        const triggerIcon = trigger?.querySelector('i') || trigger;
         const iconWasSpinning = triggerIcon?.classList.contains('fa-spin') || false;
         const previousAriaBusy = trigger?.getAttribute('aria-busy');
         if (trigger) {
@@ -969,7 +1265,6 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
                 backgroundMode: featureSettings.backgroundMode,
             });
             const gap = validElements.length > 1 ? 5 : 0;
-            const geometry = snapshotCaptureGeometry(validElements, captureSettings.scale, gap);
             const taskId = ++taskGeneration;
             task = {
                 id: taskId,
@@ -977,7 +1272,9 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
                 chat,
                 elements: validElements,
                 settings: captureSettings,
-                geometry,
+                geometry: null,
+                imageBudget: new Map(),
+                lossless: captureSettings.format === 'png',
                 failures: new Set(),
             };
             task.assertActive = () => {
@@ -990,8 +1287,18 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
                     throw new Error('截图任务已取消。');
                 }
             };
-            task.fetchFn = createResourceFetcher(task.failures, task.assertActive);
+            task.fetchFn = createResourceFetcher(task);
             activeTask = task;
+
+            // 先把懒加载图片加载完，再测量尺寸，否则图片所占高度不会被计入、底部会被裁掉。
+            const { restoreLoading, unloaded } = await preloadLazyMedia(validElements, task.assertActive);
+            task.restoreLoading = restoreLoading;
+            task.assertActive();
+            if (unloaded > 0) {
+                showToast('warning', `有 ${unloaded} 张图片尚未加载/生成，截图中将显示为当前占位状态。`);
+            }
+            task.geometry = snapshotCaptureGeometry(validElements, captureSettings.scale, gap);
+            task.imageBudget = collectImageBudget(validElements, task.geometry.sizing.scale);
 
             const { blob, extension } = await buildScreenshot(validElements, task);
             task.assertActive();
@@ -1008,6 +1315,9 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             }
         } finally {
             if (activeTask === task) activeTask = null;
+            try {
+                task?.restoreLoading?.();
+            } catch { /* ignore */ }
             if (trigger) {
                 if (!iconWasSpinning) triggerIcon?.classList.remove('fa-spin');
                 if (previousAriaBusy === null) trigger.removeAttribute('aria-busy');
@@ -1050,17 +1360,29 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         rangeMenu = menu;
     }
 
+    function getButtonPlacement() {
+        return featureSettings.buttonPlacement === 'extra' ? 'extra' : 'inline';
+    }
+
     function addMessageButton(message) {
-        if (message.querySelector(`.${MESSAGE_BUTTON_CLASS}`)) return;
+        const placement = getButtonPlacement();
+        const existing = message.querySelector(`.${MESSAGE_BUTTON_CLASS}`);
+        if (existing) {
+            if (existing.dataset.placement === placement) return;
+            existing.remove();
+        }
         const container = message.querySelector('.mes_block .mes_buttons');
         if (!container) return;
 
+        // 沿用 ST 原生消息按钮的写法（index.html #message_template）：FontAwesome 类直接放在 .mes_button 上，
+        // 这样尺寸/透明度/hover/主题样式与内置按钮完全一致；键盘可访问性（tabindex、Enter 触发）由 ST 的
+        // keyboard.js 对 `.mes_buttons .mes_button` 自动处理，无需手动设置。
         const button = document.createElement('div');
-        button.className = `${MESSAGE_BUTTON_CLASS} mes_button interactable`;
+        button.className = `${MESSAGE_BUTTON_CLASS} mes_button fa-solid fa-camera`;
         button.title = '单击截图，长按选择相邻消息';
-        button.tabIndex = 0;
         button.setAttribute('role', 'button');
-        button.innerHTML = '<i class="fa-solid fa-camera"></i>';
+        button.setAttribute('aria-label', '截图');
+        button.dataset.placement = placement;
         let pressTimer = 0;
         let longPressed = false;
 
@@ -1106,14 +1428,20 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             void capture([message], button);
         });
         button.addEventListener('keydown', event => {
-            if (event.key === 'Enter' || event.key === ' ') {
+            // Enter 由 ST keyboard.js 统一转为 click，这里只补上空格键。
+            if (event.key === ' ') {
                 event.preventDefault();
                 void capture([message], button);
             }
         });
 
         const extraButtons = container.querySelector(':scope > .extraMesButtons');
-        container.insertBefore(button, extraButtons || null);
+        if (placement === 'extra' && extraButtons) {
+            // 放进“…”展开菜单，与翻译/生图等扩展按钮同组，不占用常驻按钮栏宽度。
+            extraButtons.appendChild(button);
+        } else {
+            container.insertBefore(button, extraButtons || null);
+        }
     }
 
     function getMultiSelectHost(create = false) {
@@ -1283,6 +1611,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         if (!controls) return;
         controls.enabled.checked = featureSettings.enabled;
         controls.messageButtons.checked = featureSettings.showMessageButtons;
+        controls.buttonPlacement.value = getButtonPlacement();
         controls.multiSelect.checked = featureSettings.showMultiSelectButton;
         controls.scale.value = String(featureSettings.scale);
         controls.scaleValue.textContent = String(featureSettings.scale);
@@ -1294,6 +1623,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
 
         const enabled = featureSettings.enabled;
         controls.messageButtons.disabled = !enabled;
+        controls.buttonPlacement.disabled = !enabled || !featureSettings.showMessageButtons;
         controls.multiSelect.disabled = !enabled;
         controls.scale.disabled = !enabled;
         controls.format.disabled = !enabled;
@@ -1318,6 +1648,11 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             featureSettings.showMessageButtons = controls.messageButtons.checked;
             saveSettings();
             updateSettingsControls();
+            scheduleRefresh();
+        });
+        controls.buttonPlacement.addEventListener('change', () => {
+            featureSettings.buttonPlacement = controls.buttonPlacement.value === 'extra' ? 'extra' : 'inline';
+            saveSettings();
             scheduleRefresh();
         });
         controls.multiSelect.addEventListener('change', () => {
@@ -1371,6 +1706,10 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         eventSource.on(eventTypes.APP_READY, beginChatSettlement);
         eventSource.on(eventTypes.CHAT_CHANGED, onChatChanged);
         eventSource.on(eventTypes.CHARACTER_MESSAGE_RENDERED, onCharacterMessageRendered);
+        // 用户消息、swipe、编辑、“加载更多”等都会重建/新增 .mes，一并触发按钮补挂（scheduleRefresh 按帧合并，开销徽小）。
+        for (const name of ['USER_MESSAGE_RENDERED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED', 'MORE_MESSAGES_LOADED']) {
+            if (eventTypes[name]) eventSource.on(eventTypes[name], scheduleRefresh);
+        }
         eventSource.on(eventTypes.SETTINGS_LOADED, scheduleRefresh);
         document.addEventListener('click', event => {
             if (rangeMenu && !rangeMenu.contains(event.target)) closeRangeMenu();
@@ -1392,6 +1731,12 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         section.innerHTML = `
             <label class="checkbox_label"><input id="st-toolbox-screenshot-enabled" type="checkbox"><span>启用截图功能</span></label>
             <label class="checkbox_label"><input id="st-toolbox-screenshot-message-buttons" type="checkbox"><span>在每条消息上显示截图按钮</span></label>
+            <label class="st-toolbox-screenshot-field">截图按钮位置
+                <select id="st-toolbox-screenshot-button-placement" class="text_pole">
+                    <option value="inline">常驻按钮栏（编辑按钮旁）</option>
+                    <option value="extra">“…”展开菜单内（节省按钮栏空间）</option>
+                </select>
+            </label>
             <label class="checkbox_label"><input id="st-toolbox-screenshot-multi-select" type="checkbox"><span>在扩展菜单显示多选截图入口</span></label>
             <label class="st-toolbox-screenshot-field">
                 <span class="st-toolbox-screenshot-label-line">
@@ -1426,6 +1771,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         controls = {
             enabled: find('#st-toolbox-screenshot-enabled'),
             messageButtons: find('#st-toolbox-screenshot-message-buttons'),
+            buttonPlacement: find('#st-toolbox-screenshot-button-placement'),
             multiSelect: find('#st-toolbox-screenshot-multi-select'),
             scale: find('#st-toolbox-screenshot-scale'),
             scaleValue: find('#st-toolbox-screenshot-scale-value'),
