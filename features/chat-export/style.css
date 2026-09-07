@@ -1,0 +1,104 @@
+.st-toolbox-export-dialog {
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+.st-toolbox-export-dialog fieldset {
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.st-toolbox-export-dialog fieldset > label,
+.st-toolbox-export-grid > label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.st-toolbox-export-dialog fieldset > .checkbox_label {
+    flex-direction: row;
+    align-items: center;
+}
+
+.st-toolbox-export-dialog .text_pole {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+.st-toolbox-export-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.st-toolbox-export-help {
+    font-size: 0.88em;
+    opacity: 0.78;
+    line-height: 1.5;
+    margin: 10px 0;
+}
+
+.st-toolbox-export-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.st-toolbox-export-actions .menu_button,
+#st-toolbox-chat-export-menu .menu_button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+}
+
+.st-toolbox-export-candidates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 8px;
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 25%, transparent);
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.st-toolbox-export-candidates .checkbox_label {
+    max-width: 100%;
+    align-items: center;
+}
+
+.st-toolbox-export-dialog progress {
+    width: 100%;
+    height: 8px;
+    margin-top: 10px;
+}
+
+.st-toolbox-export-status {
+    min-height: 1.5em;
+    margin-top: 10px;
+    font-size: 0.9em;
+}
+
+.st-toolbox-export-dialog [hidden] {
+    display: none !important;
+}
+
+.st-toolbox-export-dialog button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+    .st-toolbox-export-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

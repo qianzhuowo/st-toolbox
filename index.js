@@ -3,6 +3,7 @@ import { ensureSettings, mountSettingsPanel, saveToolboxSettings, synchronizeSet
 import { createQrBarFeature } from './features/qr-bar/index.js';
 import { createNotificationsFeature } from './features/notifications/index.js';
 import { createScreenshotFeature } from './features/screenshot/index.js';
+import { createChatExportFeature } from './features/chat-export/index.js';
 
 const LOAD_GUARD = '__stToolboxLoaded';
 
@@ -25,9 +26,11 @@ async function initialize() {
     const qrBar = createQrBarFeature(featureContext);
     const notifications = createNotificationsFeature(featureContext);
     const screenshot = createScreenshotFeature(featureContext);
+    const chatExport = createChatExportFeature(featureContext);
 
     qrBar.init();
     screenshot.init();
+    chatExport.init();
 
     try {
         await notifications.init();
@@ -39,12 +42,14 @@ async function initialize() {
         { id: 'qr-bar', title: 'QR 栏收起/展开', render: qrBar.renderSettings },
         { id: 'notifications', title: '回复提示通知', render: notifications.renderSettings },
         { id: 'screenshot', title: '消息截图', render: screenshot.renderSettings },
+        { id: 'chat-export', title: '对话导出', render: chatExport.renderSettings },
     ]);
     const synchronize = () => {
         synchronizeSettings(settings);
         qrBar.syncSettings?.();
         notifications.syncSettings?.();
         screenshot.syncSettings?.();
+        chatExport.syncSettings?.();
         mountPanel();
     };
 

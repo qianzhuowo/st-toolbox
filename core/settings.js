@@ -4,12 +4,13 @@ import { extension_settings } from '../../../../extensions.js';
 export const EXTENSION_NAME = 'st-toolbox';
 
 export const DEFAULT_SETTINGS = Object.freeze({
-    version: 2,
+    version: 3,
     ui: {
         sections: {
             'qr-bar': false,
             notifications: false,
             screenshot: false,
+            'chat-export': false,
         },
     },
     qrBar: {
@@ -26,6 +27,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
         volume: 0.5,
         successSound: 'builtin:success',
         errorSound: 'builtin:error',
+    },
+    chatExport: {
+        enabled: true,
+        role: 'all',
+        format: 'txt',
+        includeSystem: false,
+        removeReasoning: true,
+        tags: '',
     },
     screenshot: {
         enabled: true,
@@ -83,6 +92,14 @@ function normalizeSettings(settings) {
     notifications.errorSound = typeof notifications.errorSound === 'string'
         ? notifications.errorSound
         : DEFAULT_SETTINGS.notifications.errorSound;
+
+    const chatExport = settings.chatExport;
+    chatExport.enabled = Boolean(chatExport.enabled);
+    chatExport.role = ['all', 'char', 'user'].includes(chatExport.role) ? chatExport.role : DEFAULT_SETTINGS.chatExport.role;
+    chatExport.format = ['txt', 'md', 'jsonl'].includes(chatExport.format) ? chatExport.format : DEFAULT_SETTINGS.chatExport.format;
+    chatExport.includeSystem = Boolean(chatExport.includeSystem);
+    chatExport.removeReasoning = Boolean(chatExport.removeReasoning);
+    chatExport.tags = typeof chatExport.tags === 'string' ? chatExport.tags.slice(0, 32768) : '';
 
     const screenshot = settings.screenshot;
     screenshot.enabled = Boolean(screenshot.enabled);

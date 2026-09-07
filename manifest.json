@@ -6,6 +6,6 @@
     "js": "index.js",
     "css": "style.css",
     "author": "Limcode",
-    "version": "1.1.2",
-    "description": "可持久化的 QR 栏开关、可靠的回复提示通知，以及兼容主题背景的消息截图工具。"
+    "version": "1.2.0",
+    "description": "可持久化的 QR 栏开关、可靠的回复提示通知、消息截图，以及支持楼层筛选与标签清理的对话导出工具。"
 }

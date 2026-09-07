@@ -1,6 +1,7 @@
 @import url('./features/qr-bar/style.css');
 @import url('./features/notifications/style.css');
 @import url('./features/screenshot/style.css');
+@import url('./features/chat-export/style.css');
 
 #st-toolbox-settings .inline-drawer-content {
     padding: 0;
