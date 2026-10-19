@@ -1,0 +1,61 @@
+# Dependencies and package-manager caches
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+.pnp.*
+
+# Generated build output and caches (not the runtime files in features/)
+/dist/
+/build/
+/out/
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+*.tsbuildinfo
+
+# Local-only tests, benchmarks and test helpers
+/tests/
+
+# Test results, coverage and browser automation artifacts
+coverage/
+.nyc_output/
+test-results/
+test-results.*
+playwright-report/
+playwright/.cache/
+blob-report/
+allure-results/
+allure-report/
+junit.xml
+junit-*.xml
+*.lcov
+
+# Logs and temporary files
+*.log
+/tmp/
+/temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Local editor and OS metadata
+/.vscode/
+/.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local environment secrets; retain example templates
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Keep runtime vendor scripts/workers, audio, icons and their notices tracked.
+# Do not add broad rules such as vendor/, *.umd.js, *.mp3 or *.ico.

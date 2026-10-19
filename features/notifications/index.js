@@ -460,13 +460,10 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
         const alertTitle = kind === 'success' ? '【回复完成】' : '【生成失败】';
         let showAlert = true;
         const updateTitle = () => {
-            if (lastFlashedTitle && document.title !== lastFlashedTitle) {
-                clearInterval(flashTimer);
-                flashTimer = 0;
-                titleBeforeFlash = '';
-                lastFlashedTitle = '';
-                restoreFavicon();
-                return;
+            if (document.title !== lastFlashedTitle) {
+                // 酒馆会在生成状态或聊天切换时更新标题；吸收新标题作为恢复目标，
+                // 不要因此停止共享的闪烁定时器（否则 favicon 也会停止闪烁）。
+                titleBeforeFlash = document.title;
             }
             lastFlashedTitle = showAlert ? alertTitle : titleBeforeFlash;
             document.title = lastFlashedTitle;

@@ -1,3 +1,4 @@
+import { createNativeMenuItem } from '../../core/native-menu.mjs';
 import { getContext } from '../../../../../extensions.js';
 import { Popup, POPUP_TYPE } from '../../../../../popup.js';
 import { power_user } from '../../../../../power-user.js';
@@ -274,17 +275,17 @@ export function createChatExportFeature({ eventSource, eventTypes, settings, sav
     function mountMenu() {
         let menu = document.getElementById(MENU_ID);
         if (!settings.chatExport.enabled) { menu?.remove(); return; }
-        const host = document.getElementById('extensionsMenu');
-        if (!host || menu) return;
-        menu = document.createElement('div');
-        menu.id = MENU_ID;
-        menu.className = 'extension_container';
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'menu_button';
-        button.innerHTML = '<i class="fa-solid fa-file-export" aria-hidden="true"></i><span>对话导出</span>';
-        button.addEventListener('click', () => void openDialog());
-        menu.appendChild(button);
+        const host = document.querySelector('#options .options-content');
+        if (!host) return;
+        if (menu?.tagName === 'A') {
+            if (menu.parentElement !== host) host.appendChild(menu);
+            return;
+        }
+        menu?.remove();
+        menu = createNativeMenuItem({
+            document, id: MENU_ID, icon: 'fa-file-export', label: '对话导出',
+            onClick: () => { void openDialog(); },
+        });
         host.appendChild(menu);
     }
 
@@ -321,7 +322,7 @@ export function createChatExportFeature({ eventSource, eventTypes, settings, sav
         settingsContainer = container;
         container.innerHTML = `
             <div class="st-toolbox-section">
-                <label class="checkbox_label"><input type="checkbox">启用对话导出（扩展菜单入口）</label>
+                <label class="checkbox_label"><input type="checkbox">启用对话导出（聊天选项菜单入口）</label>
                 <div class="st-toolbox-row"><button type="button" class="menu_button">导出当前对话</button></div>
                 <p class="st-toolbox-help">支持 char／user／全部、楼层范围、思维链和自选标签清理，输出 TXT、Markdown 或 JSONL。仅在点击探测或导出时扫描；记住上次成功操作的选项，不记住楼层范围。</p>
             </div>`;

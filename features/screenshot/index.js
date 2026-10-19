@@ -1,3 +1,5 @@
+import { createNativeMenuItem } from '../../core/native-menu.mjs';
+import { createMessageButtons } from './message-buttons.mjs';
 const SCRIPT_ID = 'st-toolbox-modern-screenshot';
 const LIBRARY_URL = '/scripts/extensions/third-party/st-toolbox/features/screenshot/vendor/modern-screenshot.umd.js';
 const MESSAGE_BUTTON_CLASS = 'st-toolbox-screenshot-button';
@@ -8,7 +10,6 @@ const MULTI_CAPTURE_ID = 'st-toolbox-screenshot-multi-capture';
 const MULTI_CANCEL_ID = 'st-toolbox-screenshot-multi-cancel';
 const SELECTED_CLASS = 'st-toolbox-screenshot-selected';
 const SELECTING_CLASS = 'st-toolbox-screenshot-selecting';
-const LONG_PRESS_DURATION = 500;
 const MAX_CANVAS_DIMENSION = 16000;
 const MAX_CANVAS_AREA = 16_000_000;
 const MAX_BACKGROUND_AREA = 8_000_000;
@@ -1364,97 +1365,18 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         return featureSettings.buttonPlacement === 'extra' ? 'extra' : 'inline';
     }
 
-    function addMessageButton(message) {
-        const placement = getButtonPlacement();
-        const existing = message.querySelector(`.${MESSAGE_BUTTON_CLASS}`);
-        if (existing) {
-            if (existing.dataset.placement === placement) return;
-            existing.remove();
-        }
-        const container = message.querySelector('.mes_block .mes_buttons');
-        if (!container) return;
+    const messageButtons = createMessageButtons({
+        document,
+        isEnabled: () => featureSettings.enabled && featureSettings.showMessageButtons,
+        getPlacement: getButtonPlacement,
+        onCapture: (message, button) => { void capture([message], button); },
+        onRange: showRangeMenu,
+    });
+    const addMessageButton = messageButtons.syncMessage;
 
-        // 沿用 ST 原生消息按钮的写法（index.html #message_template）：FontAwesome 类直接放在 .mes_button 上，
-        // 这样尺寸/透明度/hover/主题样式与内置按钮完全一致；键盘可访问性（tabindex、Enter 触发）由 ST 的
-        // keyboard.js 对 `.mes_buttons .mes_button` 自动处理，无需手动设置。
-        const button = document.createElement('div');
-        button.className = `${MESSAGE_BUTTON_CLASS} mes_button fa-solid fa-camera`;
-        button.title = '单击截图，长按选择相邻消息';
-        button.setAttribute('role', 'button');
-        button.setAttribute('aria-label', '截图');
-        button.dataset.placement = placement;
-        let pressTimer = 0;
-        let longPressed = false;
-
-        const startPress = event => {
-            if (event.type === 'pointerdown' && event.button !== 0) return;
-            // 阻止 pointerdown 的默认行为：不让截图按钮抢走焦点（例如从 #send_textarea 移走），
-            // 避免焦点变化引起输入框/软键盘/布局变化进而导致聊天区滚动。click 事件不受影响。
-            event.preventDefault();
-            longPressed = false;
-            const startX = event.clientX;
-            const startY = event.clientY;
-            button.setPointerCapture?.(event.pointerId);
-            pressTimer = setTimeout(() => {
-                longPressed = true;
-                showRangeMenu(button, message);
-            }, LONG_PRESS_DURATION);
-            const cancelOnMove = moveEvent => {
-                if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 10) {
-                    cancelPress();
-                    button.removeEventListener('pointermove', cancelOnMove);
-                }
-            };
-            button.addEventListener('pointermove', cancelOnMove);
-            button.addEventListener('pointerup', () => button.removeEventListener('pointermove', cancelOnMove), { once: true });
-            button.addEventListener('pointercancel', () => button.removeEventListener('pointermove', cancelOnMove), { once: true });
-        };
-        const cancelPress = () => {
-            clearTimeout(pressTimer);
-            pressTimer = 0;
-        };
-
-        button.addEventListener('pointerdown', startPress);
-        button.addEventListener('pointerup', cancelPress);
-        button.addEventListener('pointercancel', cancelPress);
-        button.addEventListener('pointerleave', cancelPress);
-        button.addEventListener('click', event => {
-            event.stopPropagation();
-            if (longPressed) {
-                event.preventDefault();
-                longPressed = false;
-                return;
-            }
-            void capture([message], button);
-        });
-        button.addEventListener('keydown', event => {
-            // Enter 由 ST keyboard.js 统一转为 click，这里只补上空格键。
-            if (event.key === ' ') {
-                event.preventDefault();
-                void capture([message], button);
-            }
-        });
-
-        const extraButtons = container.querySelector(':scope > .extraMesButtons');
-        if (placement === 'extra' && extraButtons) {
-            // 放进“…”展开菜单，与翻译/生图等扩展按钮同组，不占用常驻按钮栏宽度。
-            extraButtons.appendChild(button);
-        } else {
-            container.insertBefore(button, extraButtons || null);
-        }
-    }
-
-    function getMultiSelectHost(create = false) {
-        let container = document.getElementById(MULTI_CONTAINER_ID);
-        if (!container && create) {
-            const menu = document.getElementById('extensionsMenu');
-            if (!menu) return null;
-            container = document.createElement('div');
-            container.id = MULTI_CONTAINER_ID;
-            container.className = 'extension_container';
-            menu.appendChild(container);
-        }
-        return container;
+    function getMultiSelectHost() {
+        document.getElementById(MULTI_CONTAINER_ID)?.remove();
+        return document.querySelector('#options .options-content');
     }
 
     function exitSelectionMode() {
@@ -1468,32 +1390,30 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
 
     function enterSelectionMode() {
         if (selecting) return;
-        selecting = true;
-        document.body.classList.add(SELECTING_CLASS);
         const host = getMultiSelectHost();
         const start = document.getElementById(MULTI_START_ID);
         if (!host || !start) return;
+        selecting = true;
+        document.body.classList.add(SELECTING_CLASS);
         start.classList.add('displayNone');
 
-        const captureButton = document.createElement('div');
-        captureButton.id = MULTI_CAPTURE_ID;
-        captureButton.className = 'menu_button';
-        captureButton.innerHTML = '<i class="fa-solid fa-camera"></i><span class="menu_button_text"> 生成多选截图</span>';
-        captureButton.addEventListener('click', async () => {
-            const selected = Array.from(document.querySelectorAll(`#chat .mes.${SELECTED_CLASS}`));
-            if (!selected.length) {
-                showToast('warning', '请至少选择一条消息。');
-                return;
-            }
-            await capture(selected, captureButton);
-            exitSelectionMode();
+        const captureButton = createNativeMenuItem({
+            document, id: MULTI_CAPTURE_ID, icon: 'fa-camera', label: '生成多选截图',
+            onClick: async () => {
+                const selected = Array.from(document.querySelectorAll(`#chat .mes.${SELECTED_CLASS}`));
+                if (!selected.length) {
+                    showToast('warning', '请至少选择一条消息。');
+                    return;
+                }
+                await capture(selected, captureButton);
+                exitSelectionMode();
+            },
         });
 
-        const cancelButton = document.createElement('div');
-        cancelButton.id = MULTI_CANCEL_ID;
-        cancelButton.className = 'menu_button';
-        cancelButton.innerHTML = '<i class="fa-solid fa-xmark"></i><span class="menu_button_text"> 取消多选截图</span>';
-        cancelButton.addEventListener('click', exitSelectionMode);
+        const cancelButton = createNativeMenuItem({
+            document, id: MULTI_CANCEL_ID, icon: 'fa-xmark', label: '取消多选截图',
+            onClick: exitSelectionMode,
+        });
         host.append(captureButton, cancelButton);
     }
 
@@ -1502,18 +1422,16 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         if (!featureSettings.enabled || !featureSettings.showMultiSelectButton) {
             existing?.remove();
             if (selecting) exitSelectionMode();
-            const container = getMultiSelectHost();
-            if (container && !container.children.length) container.remove();
+            document.getElementById(MULTI_CONTAINER_ID)?.remove();
             return;
         }
         if (existing) return;
-        const host = getMultiSelectHost(true);
+        const host = getMultiSelectHost();
         if (!host) return;
-        const button = document.createElement('div');
-        button.id = MULTI_START_ID;
-        button.className = 'menu_button';
-        button.innerHTML = '<i class="fa-solid fa-images"></i><span class="menu_button_text"> 多选截图</span>';
-        button.addEventListener('click', enterSelectionMode);
+        const button = createNativeMenuItem({
+            document, id: MULTI_START_ID, icon: 'fa-images', label: '多选截图',
+            onClick: enterSelectionMode,
+        });
         host.appendChild(button);
     }
 
@@ -1526,6 +1444,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
     function refreshUi() {
         observeChat();
         ensureMultiSelectButton();
+        messageButtons.syncTemplate();
         if (chatSettling) return;
         observer?.disconnect();
         try {
@@ -1691,6 +1610,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
     }
 
     function onChatChanged() {
+        messageButtons.cancelPress();
         chatEpoch += 1;
         invalidateTask();
         closeRangeMenu();
@@ -1703,15 +1623,20 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
     }
 
     function init() {
+        messageButtons.install();
+        messageButtons.syncTemplate();
         eventSource.on(eventTypes.APP_READY, beginChatSettlement);
         eventSource.on(eventTypes.CHAT_CHANGED, onChatChanged);
         eventSource.on(eventTypes.CHARACTER_MESSAGE_RENDERED, onCharacterMessageRendered);
         // 用户消息、swipe、编辑、“加载更多”等都会重建/新增 .mes，一并触发按钮补挂（scheduleRefresh 按帧合并，开销徽小）。
-        for (const name of ['USER_MESSAGE_RENDERED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED', 'MORE_MESSAGES_LOADED']) {
+        for (const name of ['USER_MESSAGE_RENDERED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED', 'MESSAGE_EDITED', 'MORE_MESSAGES_LOADED', 'MESSAGE_DELETED']) {
             if (eventTypes[name]) eventSource.on(eventTypes[name], scheduleRefresh);
         }
         eventSource.on(eventTypes.SETTINGS_LOADED, scheduleRefresh);
         document.addEventListener('click', event => {
+            // Delegated message clicks share this document target. In particular, the
+            // release click after a long press must not immediately close its range menu.
+            if (event.defaultPrevented) return;
             if (rangeMenu && !rangeMenu.contains(event.target)) closeRangeMenu();
         });
         window.addEventListener('resize', closeRangeMenu);
@@ -1737,7 +1662,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
                     <option value="extra">“…”展开菜单内（节省按钮栏空间）</option>
                 </select>
             </label>
-            <label class="checkbox_label"><input id="st-toolbox-screenshot-multi-select" type="checkbox"><span>在扩展菜单显示多选截图入口</span></label>
+            <label class="checkbox_label"><input id="st-toolbox-screenshot-multi-select" type="checkbox"><span>在聊天选项菜单显示多选截图入口</span></label>
             <label class="st-toolbox-screenshot-field">
                 <span class="st-toolbox-screenshot-label-line">
                     <span class="st-toolbox-screenshot-label-title">截图倍率 <i class="fa-solid fa-circle-question st-toolbox-setting-hint" title="控制输出分辨率：2× 会让宽和高各变为 2 倍。倍率越高越清晰，但截图更慢、占用内存更多。" aria-label="截图倍率说明"></i></span>
