@@ -7,24 +7,38 @@ node_modules/
 .yarn/install-state.gz
 .pnp.*
 
-# Generated build output and caches (not the runtime files in features/)
-/dist/
-/build/
-/out/
+# Disposable build output and caches, including nested packages.
+# features/tomatojuice/runtime.js is a required browser entry, NOT disposable output.
+dist/
+build/
+out/
 .cache/
 .parcel-cache/
 .vite/
 .turbo/
+.rollup.cache/
+.eslintcache
+.stylelintcache
 *.tsbuildinfo
+*.js.map
+*.mjs.map
+*.css.map
+/*.tgz
 
-# Local-only tests, benchmarks and test helpers
+# Local-only tests, benchmarks, fixtures and helpers; keep them on disk, not in Git.
+/test/
 /tests/
+/__tests__/
+/benchmarks/
 
 # Test results, coverage and browser automation artifacts
 coverage/
 .nyc_output/
 test-results/
 test-results.*
+test-output/
+test-artifacts/
+benchmark-results/
 playwright-report/
 playwright/.cache/
 blob-report/
@@ -33,6 +47,8 @@ allure-report/
 junit.xml
 junit-*.xml
 *.lcov
+*.cpuprofile
+*.heapprofile
 
 # Logs and temporary files
 *.log
@@ -57,5 +73,12 @@ Desktop.ini
 !.env.example
 !.env.sample
 
+# Local Tomatojuice runtime data and user-specific backend configuration
+/_st-toolbox/
+/data/
+/server-plugin/st-toolbox-server/tomatojuice.config.json
+
+# Keep build sources/scripts, package.json and package-lock.json for reproducible builds.
+# Keep features/tomatojuice/runtime.js: SillyTavern loads it without a user-side build.
 # Keep runtime vendor scripts/workers, audio, icons and their notices tracked.
 # Do not add broad rules such as vendor/, *.umd.js, *.mp3 or *.ico.

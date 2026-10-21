@@ -1,0 +1,1050 @@
+/* st-tomatojuice
+ * - bundle styles from:
+ *   - st-chat-render-optimizer
+ *   - st-regex-refresh-optimizer
+ *   - st-startup-optimizer
+ */
+
+/* -------------------------------------------------------------------------- */
+/* st-html-render-cache                                                       */
+/* -------------------------------------------------------------------------- */
+
+#st-hrc-stash-root,
+.st-hrc-stash-root {
+  display: none !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* tomatojuice 自定义“茄汁面板 + 子面板”样式（不使用酒馆 inline-drawer 样式） */
+/* -------------------------------------------------------------------------- */
+
+#tomatojuice_settings_root.tomatojuice-panel-root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#tomatojuice_settings_root .tomatojuice-panel-header {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+#tomatojuice_settings_root .tomatojuice-panel-desc {
+  opacity: 0.85;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#tomatojuice_settings_root .tomatojuice-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#tomatojuice_settings_root .tomatojuice-subpanel {
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+#tomatojuice_settings_root .tomatojuice-subpanel-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+  user-select: none;
+}
+
+#tomatojuice_settings_root .tomatojuice-subpanel-header:hover {
+  filter: brightness(1.08);
+}
+
+#tomatojuice_settings_root .tomatojuice-subpanel-title {
+  font-weight: 700;
+  font-size: 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#tomatojuice_settings_root .tomatojuice-subpanel-indicator {
+  opacity: 0.85;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+}
+
+#tomatojuice_settings_root .tomatojuice-subpanel-body {
+  padding: 10px 12px;
+}
+
+#tomatojuice_settings_root .tomatojuice-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#tomatojuice_settings_root .tomatojuice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+
+#tomatojuice_settings_root .tomatojuice-grid {
+  /* Allow the grid to adapt to narrow side-panels without relying on viewport width */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  min-width: 0;
+}
+
+#tomatojuice_settings_root .tomatojuice-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#tomatojuice_settings_root .tomatojuice-field {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+#tomatojuice_settings_root .tomatojuice-label {
+  opacity: 0.9;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#tomatojuice_settings_root input[type="number"],
+#tomatojuice_settings_root select {
+  width: min(140px, 100%);
+  max-width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  box-sizing: border-box;
+}
+
+/* Keep the control aligned to the right when on the same row */
+#tomatojuice_settings_root .tomatojuice-field > input[type="number"],
+#tomatojuice_settings_root .tomatojuice-field > select {
+  margin-left: auto;
+  flex: 0 1 140px;
+}
+
+@media (max-width: 720px) {
+  /* Fallback for older browsers without container-aware layout */
+  #tomatojuice_settings_root .tomatojuice-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+#tomatojuice_settings_root .tomatojuice-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+#tomatojuice_settings_root .tomatojuice-btn {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  cursor: pointer;
+}
+
+#tomatojuice_settings_root .tomatojuice-btn:hover {
+  filter: brightness(1.12);
+}
+
+#tomatojuice_settings_root .tomatojuice-help {
+  opacity: 0.85;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#tomatojuice_settings_root .tomatojuice-help code {
+  padding: 0 4px;
+  border-radius: 6px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+#tomatojuice_settings_root .tomatojuice-empty,
+#tomatojuice_settings_root .tomatojuice-error {
+  opacity: 0.85;
+  font-size: 12px;
+}
+
+.st-tomatojuice-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.st-tomatojuice-intro {
+  opacity: 0.9;
+  font-size: 0.95em;
+  line-height: 1.35;
+}
+
+.st-tomatojuice-intro .st-tomatojuice-sub {
+  opacity: 0.85;
+  font-size: 0.9em;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* 茄汁 安装入口与一次性介绍弹窗 */
+/* -------------------------------------------------------------------------- */
+
+#tomatojuice_settings_root .tomatojuice-installer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#tomatojuice_settings_root .tomatojuice-status {
+  padding: 8px 10px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+
+#tomatojuice_settings_root .tomatojuice-source-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+#tomatojuice_settings_root .tomatojuice-actions {
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tomatojuice-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.tomatojuice-modal {
+  width: min(560px, 96vw);
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 14px;
+  background: var(--SmartThemeBlurTintColor, var(--SmartThemeBodyColor, #222));
+  color: var(--SmartThemeBodyColor, inherit);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  padding: 16px;
+}
+
+.tomatojuice-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.tomatojuice-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  line-height: 1.45;
+}
+
+.tomatojuice-modal-body p {
+  margin: 0;
+}
+
+.tomatojuice-modal-body .tomatojuice-source-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tomatojuice-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.tomatojuice-modal .tomatojuice-btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: pointer;
+}
+
+.tomatojuice-modal .tomatojuice-btn:hover {
+  filter: brightness(1.12);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 茄汁统一表单控件（对齐“首屏渲染条数”样式） */
+/* -------------------------------------------------------------------------- */
+
+#st-tomatojuice-settings-root input[type="number"],
+#st-tomatojuice-settings-root select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  box-sizing: border-box;
+}
+
+#st-tomatojuice-settings-root input[type="number"] {
+  width: 90px;
+}
+
+/* Keep buttons horizontal (some themes may rotate text) */
+#st-tomatojuice-settings-root .menu_button {
+  white-space: nowrap;
+  word-break: keep-all;
+  writing-mode: horizontal-tb;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 茄汁面板背景（避免透明无色） */
+/* -------------------------------------------------------------------------- */
+
+/* 子面板在 #st-tomatojuice-subpanels 内，不会命中酒馆对 #extensions_settings 的默认 header 样式；
+   这里补齐一份同风格的 header，并给内容区加背景色。 */
+.st-tomatojuice-panel-wrapper .inline-drawer-toggle.inline-drawer-header {
+  background-image: linear-gradient(
+    348deg,
+    var(--white30a) 2%,
+    var(--grey30a) 10%,
+    var(--black70a) 95%,
+    var(--SmartThemeQuoteColor) 100%
+  );
+  margin-bottom: 5px;
+  border-radius: 10px;
+  padding: 2px 5px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  transition: all var(--animation-duration-2x);
+}
+
+.st-tomatojuice-panel-wrapper .inline-drawer-toggle.inline-drawer-header:hover {
+  filter: brightness(150%);
+}
+
+.st-tomatojuice-panel-wrapper .inline-drawer-content {
+  border: 1px solid var(--SmartThemeBorderColor);
+  border-radius: 10px;
+  padding: 10px;
+  background-color: var(--SmartThemeBlurTintColor);
+}
+
+/* Give nested drawers a bit of spacing */
+#st-tomatojuice-subpanels .inline-drawer {
+  margin-top: 8px;
+}
+#st-tomatojuice-subpanels .inline-drawer:first-child {
+  margin-top: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* st-chat-render-optimizer */
+/* -------------------------------------------------------------------------- */
+
+.st-cro-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.st-cro-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.st-cro-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-cro-help {
+  opacity: 0.85;
+  font-size: 0.9em;
+  line-height: 1.35;
+}
+
+/* Hide code blocks (show placeholder) */
+body.st-cro-hide-code #chat .mes_text pre {
+  cursor: pointer;
+}
+
+body.st-cro-hide-code #chat .mes_text pre.st-cro-code-expanded {
+  cursor: auto;
+}
+
+/* Collapsed: keep the original <pre><code> box styles, but hide its content visually */
+body.st-cro-hide-code #chat .mes_text pre:not(.st-cro-code-expanded) code,
+body.st-cro-hide-code #chat .mes_reasoning pre:not(.st-cro-code-expanded) code {
+  position: relative; /* ensure placeholder overlay positioning */
+  overflow: hidden !important;
+  max-height: 3.5em; /* roughly: 2em padding + 1 line */
+  color: transparent !important; /* hide raw text nodes */
+}
+
+body.st-cro-hide-code #chat .mes_text pre:not(.st-cro-code-expanded) code *,
+body.st-cro-hide-code #chat .mes_reasoning pre:not(.st-cro-code-expanded) code * {
+  color: transparent !important; /* hide hljs spans */
+}
+
+body.st-cro-hide-code #chat .mes_text pre:not(.st-cro-code-expanded) code::after,
+body.st-cro-hide-code #chat .mes_reasoning pre:not(.st-cro-code-expanded) code::after {
+  content: "⟦ 点击展开代码块 ⟧";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 1em; /* match SillyTavern default code padding */
+  color: var(--SmartThemeBodyColor, #e8e8e8);
+  opacity: 0.85;
+  font-size: 0.95em;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none; /* click is handled on <pre> */
+}
+
+body.st-cro-hide-code #chat .mes_text pre:not(.st-cro-code-expanded) code .code-copy,
+body.st-cro-hide-code #chat .mes_reasoning pre:not(.st-cro-code-expanded) code .code-copy {
+  display: none !important;
+}
+
+/* Collapse button: reuses .code-copy base styles, but shifted left. Hidden by default. */
+#chat .st-cro-code-collapse {
+  display: none;
+}
+
+body.st-cro-hide-code #chat pre.st-cro-code-expanded code .st-cro-code-collapse {
+  display: flex;
+  right: 26px;
+}
+
+/* Also cover reasoning blocks (same structure as mes_text) */
+body.st-cro-hide-code #chat .mes_reasoning pre {
+  cursor: pointer;
+}
+
+body.st-cro-hide-code #chat .mes_reasoning pre.st-cro-code-expanded {
+  cursor: auto;
+}
+
+/* Ensure native scroll anchoring is enabled for prepend (default is auto, but make it explicit). */
+#chat {
+  overflow-anchor: auto;
+}
+
+/* -------------------------------------------------------------------------- */
+/* st-regex-refresh-optimizer */
+/* -------------------------------------------------------------------------- */
+
+.st-rro-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-rro-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.st-rro-row label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.st-rro-help {
+  opacity: 0.85;
+  font-size: 0.95em;
+}
+
+/* -------------------------------------------------------------------------- */
+/* st-startup-optimizer */
+/* -------------------------------------------------------------------------- */
+
+.st-startup-optimizer-badge {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2147483646;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.25;
+  pointer-events: none;
+  max-width: min(420px, 60vw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.st-startup-optimizer-badge[data-state="done"] {
+  background: rgba(0, 128, 0, 0.65);
+}
+
+.st-startup-optimizer-badge[data-state="error"] {
+  background: rgba(160, 0, 0, 0.7);
+}
+
+.st-startup-optimizer-badge .stso-sub {
+  opacity: 0.85;
+  margin-left: 6px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* st-ui-animation-optimizer */
+/* -------------------------------------------------------------------------- */
+
+.st-uao-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.st-uao-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.st-uao-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-uao-help {
+  opacity: 0.85;
+  font-size: 0.95em;
+  line-height: 1.35;
+}
+
+.st-uao-help code {
+  padding: 0 4px;
+  border-radius: 6px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+/* Top drawers: avoid height transitions; use transform/opacity instead. */
+@keyframes st-uao-topDrawerIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+body.st-uao-top-drawer #top-settings-holder .drawer-content {
+  /* Core uses transition on height/display; disable it to avoid layout thrash. */
+  transition-property: none !important;
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+}
+
+body.st-uao-top-drawer #top-settings-holder .drawer-content.openDrawer {
+  animation: st-uao-topDrawerIn var(--animation-duration-2x) ease both;
+  /* Avoid persistent stacking-context side effects (e.g. color picker popup layering). */
+  will-change: opacity;
+}
+
+/* Keep Theme Colors popups above subsequent settings rows in top drawers.
+   (ToolCool popup lives in Shadow DOM; lifting the host container is the most reliable fix.) */
+body.st-uao-top-drawer #top-settings-holder .inline-drawer-content:has(#color-picker-block) {
+  position: relative;
+  z-index: 10;
+}
+
+body.st-uao-top-drawer #top-settings-holder #color-picker-block {
+  position: relative;
+  /* keep picker z-index arbitration local, avoid cross-row flicker during fast switching */
+  isolation: isolate;
+}
+
+body.st-uao-top-drawer #top-settings-holder #color-picker-block toolcool-color-picker {
+  position: relative;
+  z-index: 1;
+}
+
+/* Within the color block, ensure the currently interacted picker is above sibling swatches,
+   otherwise old rows may visually cover the popup panel. */
+body.st-uao-top-drawer #top-settings-holder #color-picker-block toolcool-color-picker.st-uao-tcp-open {
+  z-index: 30;
+}
+
+/* Disable height/display transitions for ALL drawer-content (PromptManager popup etc). */
+body.st-uao-top-drawer .drawer-content {
+  transition-property: none !important;
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+}
+
+/* Replace jQuery slideToggle/Up/Down (height animation) with compositor-friendly transitions */
+body.st-uao-jq-slide .st-uao-slide {
+  will-change: opacity, transform;
+  transition:
+    opacity var(--st-uao-slide-duration, var(--animation-duration-2x)) ease,
+    transform var(--st-uao-slide-duration, var(--animation-duration-2x)) ease;
+  transform-origin: top;
+}
+
+body.st-uao-jq-slide .st-uao-slide:not(.st-uao-open) {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+body.st-uao-jq-slide .st-uao-slide.st-uao-open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* Optional: disable expensive blur on drawer backgrounds. */
+body.st-uao-no-blur .drawer-content {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* WorldInfo inline-drawer: avoid height/max-height animation (layout thrash).
+   We mimic the top drawer feel: transform/opacity only, so it stays compositor-friendly. */
+body.st-uao-wi-inline #WorldInfo #world_popup_entries_list .inline-drawer.st-uao-managed > .inline-drawer-content {
+  will-change: opacity, transform;
+  transition:
+    opacity var(--animation-duration-2x) ease,
+    transform var(--animation-duration-2x) ease;
+  transform-origin: top;
+  contain: layout paint;
+}
+
+body.st-uao-wi-inline #WorldInfo #world_popup_entries_list .inline-drawer.st-uao-managed:not(.st-uao-open) > .inline-drawer-content {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+body.st-uao-wi-inline #WorldInfo #world_popup_entries_list .inline-drawer.st-uao-managed.st-uao-open > .inline-drawer-content {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+body.st-uao-wi-inline #WorldInfo #world_popup_entries_list .st-uao-wi-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  opacity: 0.85;
+  font-size: 12px;
+  padding: 8px 6px;
+}
+
+/* Extensions inline-drawer: same "top drawer" feel (transform/opacity only) */
+body.st-uao-ext-inline #extensions_settings2 .inline-drawer.st-uao-managed > .inline-drawer-content,
+body.st-uao-ext-inline #extensions_settings .inline-drawer.st-uao-managed > .inline-drawer-content {
+  will-change: opacity, transform;
+  transition:
+    opacity var(--animation-duration-2x) ease,
+    transform var(--animation-duration-2x) ease;
+  transform-origin: top;
+  contain: layout paint;
+}
+
+body.st-uao-ext-inline #extensions_settings2 .inline-drawer.st-uao-managed:not(.st-uao-open) > .inline-drawer-content,
+body.st-uao-ext-inline #extensions_settings .inline-drawer.st-uao-managed:not(.st-uao-open) > .inline-drawer-content {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+body.st-uao-ext-inline #extensions_settings2 .inline-drawer.st-uao-managed.st-uao-open > .inline-drawer-content,
+body.st-uao-ext-inline #extensions_settings .inline-drawer.st-uao-managed.st-uao-open > .inline-drawer-content {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* WorldInfo entry title/memo textarea:
+   - Ensure flex children can shrink so wrapping works reliably
+   - Only allow internal wheel scrolling when focused */
+body #WorldInfo #world_popup_entries_list .WIEntryTitleAndStatus .flex-container.flex1 {
+  min-width: 0;
+}
+
+body #WorldInfo #world_popup_entries_list textarea[name="comment"].text_pole {
+  min-width: 0;
+  width: 100%;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important; /* allow wheel to scroll the list unless focused */
+}
+
+body #WorldInfo #world_popup_entries_list textarea[name="comment"].text_pole:focus {
+  overflow-y: auto !important;
+}
+
+/* WorldInfo long list: optional content-visibility/contain to reduce layout/paint cost. */
+body.st-uao-wi-cv #WorldInfo #world_popup_entries_list .world_entry {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 260px;
+}
+
+body.st-uao-wi-cv #WorldInfo #world_popup_entries_list .world_entry,
+body.st-uao-wi-cv #WorldInfo #world_popup_entries_list .world_entry .inline-drawer-content {
+  contain: content;
+}
+
+/* -------------------------------------------------------------------------- */
+/* st-chat-saving-unblocker (integrated) */
+/* -------------------------------------------------------------------------- */
+
+.st-csu-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.st-csu-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.st-csu-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-csu-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-csu-help {
+  opacity: 0.85;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Badge fixed ABOVE send button (requested) */
+#send_but {
+  position: relative;
+  overflow: visible;
+}
+
+#send_but .st-csu-save-badge {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 2147483646;
+
+  display: none; /* default hidden */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+
+  font-size: 12px;
+  line-height: 1.1;
+
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.30);
+
+  pointer-events: none; /* saving state won't block UI */
+  user-select: none;
+}
+
+#send_but .st-csu-save-badge[data-state="saving"],
+#send_but .st-csu-save-badge[data-state="failed"] {
+  display: flex;
+}
+
+#send_but .st-csu-save-badge[data-state="failed"] {
+  background: rgba(160, 0, 0, 0.62);
+  pointer-events: auto; /* click to retry */
+  cursor: pointer;
+}
+
+#send_but .st-csu-save-badge-arrow {
+  font-weight: 800;
+  font-size: 16px;
+  line-height: 1;
+}
+
+#send_but .st-csu-save-badge-text {
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Portrait: more translucent */
+@media (orientation: portrait) {
+  #send_but .st-csu-save-badge {
+    background: rgba(0, 0, 0, 0.42);
+  }
+  #send_but .st-csu-save-badge[data-state="failed"] {
+    background: rgba(160, 0, 0, 0.48);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* st-worldinfo-drag-optimizer */
+/* -------------------------------------------------------------------------- */
+
+/* Lightweight drag helper (compositor-friendly) */
+body.st-wido-enabled .st-wio-helper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(0, 0, 0, 0.55);
+  color: inherit;
+
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.2;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  pointer-events: none;
+  user-select: none;
+
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+
+  will-change: transform, opacity;
+}
+
+/* Drag ghost is positioned via transform (JS) */
+body.st-wido-enabled .st-wio-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+}
+
+/* Drop indicator line (fixed, spans the list width) */
+body.st-wido-enabled .st-wio-drop-indicator {
+  position: fixed;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--SmartThemeQuoteColor);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Placeholder: keep list stable & visible */
+body.st-wido-enabled #WorldInfo #world_popup_entries_list .st-wio-placeholder {
+  border: 1px dashed var(--SmartThemeBorderColor);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  box-sizing: border-box;
+  visibility: visible !important;
+}
+
+body.st-wido-enabled #WorldInfo #world_popup_entries_list .st-wio-placeholder * {
+  visibility: hidden !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* st-regex-drag-optimizer */
+/* -------------------------------------------------------------------------- */
+
+/* Lightweight drag helper (compositor-friendly) */
+body.st-rdo-enabled .st-rdo-helper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(0, 0, 0, 0.55);
+  color: inherit;
+
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.2;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  pointer-events: none;
+  user-select: none;
+
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+
+  will-change: transform, opacity;
+}
+
+/* Drag ghost is positioned via transform (JS) */
+body.st-rdo-enabled .st-rdo-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+}
+
+/* Drop indicator line (fixed, spans the list width) */
+body.st-rdo-enabled .st-rdo-drop-indicator {
+  position: fixed;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--SmartThemeQuoteColor);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Placeholder: keep list stable & visible (only for sortable engine) */
+body.st-rdo-enabled .regex_settings .regex-script-container .st-rdo-placeholder {
+  border: 1px dashed var(--SmartThemeBorderColor);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  box-sizing: border-box;
+  visibility: visible !important;
+}
+
+body.st-rdo-enabled .regex_settings .regex-script-container .st-rdo-placeholder * {
+  visibility: hidden !important;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* st-preset-drag-optimizer (PromptManager drag display) */
+/* -------------------------------------------------------------------------- */
+
+body.st-pdo-drag-enabled .st-pdo-helper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--SmartThemeBorderColor);
+  background: rgba(0, 0, 0, 0.55);
+  color: inherit;
+
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.2;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  pointer-events: none;
+  user-select: none;
+
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+/* 指示线模式下，幽灵块走 fixed + transform */
+body.st-pdo-drag-enabled .st-pdo-drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+}
+
+/* 指示线 */
+body.st-pdo-drag-enabled .st-pdo-drop-indicator {
+  position: fixed;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--SmartThemeQuoteColor);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  user-select: none;
+}
+
+body.st-pdo-drag-enabled ul[id$="prompt_manager_list"] .st-pdo-placeholder {
+  border: 1px dashed var(--SmartThemeBorderColor);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  box-sizing: border-box;
+  visibility: visible !important;
+}
+
+body.st-pdo-drag-enabled ul[id$="prompt_manager_list"] .st-pdo-placeholder * {
+  visibility: hidden !important;
+}

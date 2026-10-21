@@ -4,6 +4,7 @@ import { createQrBarFeature } from './features/qr-bar/index.js';
 import { createNotificationsFeature } from './features/notifications/index.js';
 import { createScreenshotFeature } from './features/screenshot/index.js';
 import { createChatExportFeature } from './features/chat-export/index.js';
+import { createTomatojuiceFeature } from './features/tomatojuice/index.js';
 
 const LOAD_GUARD = '__stToolboxLoaded';
 
@@ -27,6 +28,7 @@ async function initialize() {
     const notifications = createNotificationsFeature(featureContext);
     const screenshot = createScreenshotFeature(featureContext);
     const chatExport = createChatExportFeature(featureContext);
+    const tomatojuice = createTomatojuiceFeature(featureContext);
 
     qrBar.init();
     screenshot.init();
@@ -38,11 +40,15 @@ async function initialize() {
         console.error('[st-toolbox] 提示通知模块初始化失败：', error);
     }
 
+    try { await tomatojuice.init(); }
+    catch (error) { console.error('[st-toolbox] tomatojuice 初始化失败，保留原生行为：', error); }
+
     const mountPanel = () => void mountSettingsPanel([
         { id: 'qr-bar', title: 'QR 栏收起/展开', render: qrBar.renderSettings },
         { id: 'notifications', title: '回复提示通知', render: notifications.renderSettings },
         { id: 'screenshot', title: '消息截图', render: screenshot.renderSettings },
         { id: 'chat-export', title: '对话导出', render: chatExport.renderSettings },
+        { id: 'tomatojuice', title: '茄汁 · 启动与交互优化', render: tomatojuice.renderSettings },
     ]);
     const synchronize = () => {
         synchronizeSettings(settings);
@@ -50,6 +56,7 @@ async function initialize() {
         notifications.syncSettings?.();
         screenshot.syncSettings?.();
         chatExport.syncSettings?.();
+        tomatojuice.syncSettings?.();
         mountPanel();
     };
 

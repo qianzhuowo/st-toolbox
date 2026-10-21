@@ -1,25 +1,25 @@
-#st-toolbox-settings .st-toolbox-notification-switches {
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-notification-switches {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 4px 10px;
 }
 
-#st-toolbox-settings .st-toolbox-volume {
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-volume {
     display: flex;
     flex-direction: column;
     gap: 5px;
     margin-top: 10px;
 }
 
-#st-toolbox-settings .st-toolbox-volume input {
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-volume input {
     width: 100%;
 }
 
-#st-toolbox-settings .st-toolbox-warning {
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-warning {
     color: var(--warning-color, #e8a849);
 }
 
-#st-toolbox-settings .st-toolbox-flash-icon-preview {
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-flash-icon-preview {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -29,14 +29,14 @@
     background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 85%, transparent);
 }
 
-#st-toolbox-settings .st-toolbox-flash-icon-preview img {
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-flash-icon-preview img {
     width: 24px;
     height: 24px;
     object-fit: contain;
     image-rendering: auto;
 }
 
-#st-toolbox-settings .st-toolbox-flash-icon-name {
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-flash-icon-name {
     flex: 1 1 120px;
     min-width: 0;
     font-size: 0.9em;

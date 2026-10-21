@@ -6,6 +6,11 @@
 2. **回复提示通知**：成功/错误提示音、自定义本地音频、标签页标题闪烁，以及生成事件去重。
 3. **消息截图**：单条、相邻范围和任意多选截图，显式合成 SillyTavern 与 Moonlit Echoes 背景。
 4. **对话导出**：按 char／user／全部及原始楼层筛选，探测并清理自选标签与思维链，导出 TXT、Markdown 或 JSONL。
+5. **茄汁 / tomatojuice**：迁入上游 cocktail / cocktail-plus（Limerence）的启动、聊天渲染、拖拽、正则、UI 优化；可选通用 `st-toolbox-server` 提供持久缓存、差量保存、early bridge 与 SW。
+
+茄汁 / tomatojuice 的首屏优化及 dynamic-styles 修复在设置面板首次显示时自动只读检查，重新打开或切回茄汁分类也会重新检查；仍可手动点击 **检查首屏状态**。安装请点击 **安装／修复首屏接入** 并明确确认，无需终端；撤销也在同一管理区。需先部署新版后端，使用管理员身份及有效酒馆 CSRF 会话。此操作会备份并修改所有用户共用的 `public/index.html`，手动刷新后生效；不改核心 JS。详见[部署与撤销说明](docs/tomatojuice-migration.md)。
+
+> 茄汁 / tomatojuice 的完整功能对照、**旧插件冲突处理、手动部署/回滚和四项日志归因**见 [迁移与部署文档](docs/tomatojuice-migration.md)。本仓库不会自动部署后端、修改运行中核心或注册根 SW。
 
 ## 安装位置
 
@@ -16,10 +21,13 @@ SillyTavern/public/scripts/extensions/third-party/st-toolbox
 重新加载 SillyTavern 后，设置页面位于：
 
 ```text
-扩展设置 → 右侧栏（#extensions_settings2）→ ST Toolbox
+扩展设置 → 右侧栏（#extensions_settings2）→ ST Toolbox → 打开工具箱设置
 ```
 
-ST Toolbox 内的每个功能都有独立折叠栏，展开状态会保存到 `extension_settings['st-toolbox'].ui.sections`，刷新后恢复；后续增加功能时不会让整个设置页面持续变长。
+扩展面板的 `#st-toolbox-settings-body` 只保留一个设置入口。详情在独立窗口中：桌面左侧分类、右侧设置；窄屏改为顶部横向分类。窗口沿用酒馆主题，支持方向键／Home／End 切换分类、Esc 关闭及焦点返回，关闭再打开保留本页的分类、表单和滚动位置。
+
+各功能首次打开时才渲染，重复打开不会重复绑定事件。打开／关闭窗口、切换分类不会触发设置保存；功能本身仍使用原来的设置结构与保存回调。旧 `ui.sections` 数据保留兼容，但不再控制窗口导航。
+
 
 ## QR 栏
 

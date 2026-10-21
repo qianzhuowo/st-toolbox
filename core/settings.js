@@ -1,16 +1,19 @@
 import { saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
+import { createSettingsWindow, createSettingsLauncher } from '../ui/settings-window.mjs';
 
 export const EXTENSION_NAME = 'st-toolbox';
 
 export const DEFAULT_SETTINGS = Object.freeze({
     version: 3,
+    tomatojuice: { enabled: true },
     ui: {
         sections: {
             'qr-bar': false,
             notifications: false,
             screenshot: false,
             'chat-export': false,
+            tomatojuice: false,
         },
     },
     qrBar: {
@@ -73,6 +76,7 @@ function normalizeSettings(settings) {
     for (const key of Object.keys(DEFAULT_SETTINGS.ui.sections)) {
         settings.ui.sections[key] = Boolean(settings.ui.sections[key]);
     }
+    settings.tomatojuice.enabled = Boolean(settings.tomatojuice.enabled);
     settings.qrBar.enabled = Boolean(settings.qrBar.enabled);
     settings.qrBar.collapsed = Boolean(settings.qrBar.collapsed);
 
@@ -231,67 +235,28 @@ function createPanel() {
     return { drawer, body };
 }
 
-function createFeatureDrawer(feature, settings) {
-    const details = document.createElement('details');
-    details.className = 'st-toolbox-feature-drawer';
-    details.dataset.feature = feature.id;
-    details.open = Boolean(settings.ui.sections[feature.id]);
-
-    const summary = document.createElement('summary');
-    summary.className = 'st-toolbox-feature-summary';
-    summary.innerHTML = `<span>${feature.title}</span><i class="fa-solid fa-chevron-down" aria-hidden="true"></i>`;
-
-    const content = document.createElement('div');
-    content.className = 'st-toolbox-feature-content';
-
-    details.addEventListener('toggle', () => {
-        settings.ui.sections[feature.id] = details.open;
-        saveToolboxSettings();
-    });
-    details.append(summary, content);
-    return { details, content };
-}
-
-function syncFeatureDrawerStates(settings) {
-    document.querySelectorAll('#st-toolbox-settings .st-toolbox-feature-drawer').forEach(details => {
-        const featureId = details.dataset.feature;
-        const shouldOpen = Boolean(settings.ui.sections[featureId]);
-        if (details.open !== shouldOpen) details.open = shouldOpen;
-    });
-}
+let settingsWindow = null;
 
 export async function mountSettingsPanel(features) {
     const existing = document.getElementById('st-toolbox-settings');
-    if (existing) {
-        syncFeatureDrawerStates(ensureSettings());
+    if (existing && settingsWindow?.dialog.isConnected) {
+        settingsWindow.update(features);
         return true;
     }
-
     const host = await findSettingsHost();
-    if (!host || document.getElementById('st-toolbox-settings')) {
-        if (!host) {
-            console.warn('[st-toolbox] 未找到 #extensions_settings2，设置页面未挂载。');
-        }
-        return Boolean(document.getElementById('st-toolbox-settings'));
+    if (!host) {
+        console.warn('[st-toolbox] 未找到 #extensions_settings2，设置入口未挂载。');
+        return false;
     }
-
-    const { drawer, body } = createPanel();
-    const settings = ensureSettings();
-
-    for (const feature of features) {
-        const { details, content } = createFeatureDrawer(feature, settings);
-        body.appendChild(details);
-        try {
-            feature.render(content);
-        } catch (error) {
-            console.error(`[st-toolbox] 设置小节渲染失败：${feature.id}`, error);
-            const message = document.createElement('div');
-            message.className = 'st-toolbox-help';
-            message.textContent = `${feature.title}设置加载失败，请查看控制台。`;
-            content.appendChild(message);
-        }
+    // Multiple readiness events may be waiting for the host at the same time.
+    if (!settingsWindow?.dialog.isConnected) settingsWindow = createSettingsWindow(features);
+    else settingsWindow.update(features);
+    let body = document.getElementById('st-toolbox-settings-body');
+    if (!body) {
+        const panel = createPanel();
+        host.appendChild(panel.drawer);
+        body = panel.body;
     }
-
-    host.appendChild(drawer);
+    if (!body.querySelector('#st-toolbox-open-settings')) createSettingsLauncher(body, settingsWindow);
     return true;
 }

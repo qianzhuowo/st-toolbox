@@ -1,0 +1,5 @@
+{
+  "name": "st-toolbox-server", "version": "1.1.0", "type": "module", "main": "index.mjs",
+  "private": true, "engines": { "node": ">=18" },
+  "description": "Extensible SillyTavern toolbox backend; no command execution or automatic core edits"
+}

@@ -1,0 +1,5 @@
+{
+  "name": "st-toolbox", "private": true, "type": "module",
+  "scripts": { "build:tomatojuice": "node scripts/build-tomatojuice.mjs", "test": "node --test test/*.test.mjs" },
+  "devDependencies": { "esbuild": "^0.25.0" }
+}
