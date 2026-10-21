@@ -150,7 +150,7 @@ export function createQrBarFeature({ eventSource, eventTypes, settings, saveSett
                 <input id="st-toolbox-qr-collapsed-setting" type="checkbox">
                 <span>收起 QR 栏</span>
             </label>
-            <p class="st-toolbox-help">收起状态会保存到 SillyTavern 设置中，刷新或切换聊天后仍会恢复。</p>
+            <p class="st-toolbox-help">自动记住收起状态，刷新或切换聊天不变。</p>
         `;
 
         enabledControl = section.querySelector('#st-toolbox-qr-enabled');

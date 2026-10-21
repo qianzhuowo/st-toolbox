@@ -1665,7 +1665,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             <label class="checkbox_label"><input id="st-toolbox-screenshot-multi-select" type="checkbox"><span>在聊天选项菜单显示多选截图入口</span></label>
             <label class="st-toolbox-screenshot-field">
                 <span class="st-toolbox-screenshot-label-line">
-                    <span class="st-toolbox-screenshot-label-title">截图倍率 <i class="fa-solid fa-circle-question st-toolbox-setting-hint" title="控制输出分辨率：2× 会让宽和高各变为 2 倍。倍率越高越清晰，但截图更慢、占用内存更多。" aria-label="截图倍率说明"></i></span>
+                    <span class="st-toolbox-screenshot-label-title">截图倍率 <i class="fa-solid fa-circle-question st-toolbox-setting-hint" title="2× 表示宽高各放大 2 倍。倍率越高，截图越慢、内存占用越多。" aria-label="截图倍率说明"></i></span>
                     <span><output id="st-toolbox-screenshot-scale-value"></output>×</span>
                 </span>
                 <input id="st-toolbox-screenshot-scale" type="range" min="1" max="3" step="0.25">
@@ -1675,7 +1675,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             </label>
             <label class="st-toolbox-screenshot-field">
                 <span class="st-toolbox-screenshot-label-line">
-                    <span class="st-toolbox-screenshot-label-title">图片质量 <i class="fa-solid fa-circle-question st-toolbox-setting-hint" title="仅影响 JPEG/WebP 的压缩质量：数值越高细节越完整、文件越大。PNG 为无损格式，不受此设置影响。" aria-label="图片质量说明"></i></span>
+                    <span class="st-toolbox-screenshot-label-title">图片质量 <i class="fa-solid fa-circle-question st-toolbox-setting-hint" title="仅影响 JPEG/WebP；数值越高文件越大。PNG 不受影响。" aria-label="图片质量说明"></i></span>
                     <span><output id="st-toolbox-screenshot-quality-value"></output>%</span>
                 </span>
                 <input id="st-toolbox-screenshot-quality" type="range" min="10" max="100" step="1">
@@ -1690,7 +1690,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             <label class="st-toolbox-screenshot-field">长按菜单最大相邻消息数
                 <select id="st-toolbox-screenshot-neighbor-count" class="text_pole"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
             </label>
-            <p class="st-toolbox-help">当前背景模式会显式合成 #bg1、Moonlit 的 #sheld::before 遮罩和 #chat 色层；即使背景图片读取失败，也会使用不透明主题底色，不会导出透明图片。复杂的消息内 backdrop-filter 会采用近似效果。JPEG 不支持透明，选择透明模式时会自动铺主题底色。</p>
+            <p class="st-toolbox-help">“当前背景”会合成背景和主题遮罩，读取失败时改用主题底色。复杂模糊效果可能与页面不同。JPEG 不支持透明，会自动填充主题底色。</p>
         `;
         const find = selector => section.querySelector(selector);
         controls = {

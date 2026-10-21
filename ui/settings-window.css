@@ -38,7 +38,8 @@
 #st-toolbox-settings-window .st-toolbox-window-brand h2 { margin: 0; font-size: 1.05em; font-weight: 650; letter-spacing: .02em; }
 #st-toolbox-settings-window .st-toolbox-window-subtitle { font-size: .78em; opacity: .6; }
 #st-toolbox-settings-window .st-toolbox-window-mark {
-    display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px;
+    display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; padding: 0; border-radius: 12px;
+    border: 1px solid transparent; font: inherit; opacity: 1;
     color: var(--tb-accent); background: color-mix(in srgb, var(--tb-accent) 12%, transparent);
 }
 #st-toolbox-settings-window .st-toolbox-window-close {
@@ -76,7 +77,22 @@
 #st-toolbox-settings-window .st-toolbox-window-page-heading h3 { font-size: 1.35em; font-weight: 650; margin: 0 0 8px; }
 #st-toolbox-settings-window .st-toolbox-window-page-heading p { margin: 0; font-size: .85em; opacity: .65; line-height: 1.65; }
 #st-toolbox-settings-window .st-toolbox-window-footer { flex-shrink: 0; padding: 12px 24px; border-top: 1px solid var(--tb-border); font-size: .74em; opacity: .65; line-height: 1.5; }
-#st-toolbox-settings-window .st-toolbox-window-feature { min-width: 0; line-height: 1.5; }
+#st-toolbox-settings-window .st-toolbox-window-feature { min-width: 0; line-height: 1.65; }
+#st-toolbox-settings-window .st-toolbox-window-feature > .st-toolbox-section {
+    padding: 18px; border: 1px solid var(--tb-border); border-radius: 14px; background: var(--tb-soft);
+}
+#st-toolbox-settings-window .st-toolbox-window-feature .st-toolbox-help {
+    margin: 10px 0 18px; font-size: .84em; line-height: 1.7; opacity: .8;
+}
+#st-toolbox-settings-window .st-toolbox-window-feature .st-toolbox-help:last-child { margin-bottom: 0; }
+#st-toolbox-settings-window .st-toolbox-window-feature .st-toolbox-notification-switches { grid-template-columns: 1fr; gap: 4px; }
+#st-toolbox-settings-window .st-toolbox-window-feature .st-toolbox-row { gap: 10px; margin-block: 12px; }
+#st-toolbox-settings-window .st-toolbox-window-feature :is(select, textarea, input:not([type="checkbox"]):not([type="range"]):not([type="file"])) {
+    min-height: 40px; padding: 8px 10px; border: 1px solid var(--tb-border);
+    color: var(--tb-text); background: var(--tb-surface); font: inherit; font-size: .9em; box-shadow: none;
+}
+#st-toolbox-settings-window .st-toolbox-window-feature input[type="range"] { accent-color: var(--tb-accent); min-width: 0; }
+#st-toolbox-settings-window .st-toolbox-window-feature .st-toolbox-screenshot-field { gap: 8px; margin-block: 16px; }
 #st-toolbox-settings-window .st-toolbox-window-feature :is(input, select, textarea, button) { max-width: 100%; }
 #st-toolbox-settings-window .st-toolbox-window-feature :is(.menu_button, .text_pole) { border-radius: 8px; }
 #st-toolbox-settings-window .st-toolbox-window-feature .checkbox_label { padding-block: 5px; }
@@ -89,13 +105,18 @@
 /* Keep the real checkbox focusable and label-associated; only its paint changes.
    Scope to this dialog so chat tools and other extensions keep their native UI. */
 #st-toolbox-settings-window label:has(> input[type="checkbox"]) {
-    display: flex; align-items: center; gap: 10px; min-width: 0;
-    padding-block: 7px; line-height: 1.5; cursor: pointer;
+    display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10px; min-width: 0;
+    min-height: 44px; padding: 10px 8px; margin: 0; border-radius: 9px;
+    line-height: 1.5; cursor: pointer;
 }
+#st-toolbox-settings-window label:has(> input[type="checkbox"]):hover { background: var(--tb-soft); }
+#st-toolbox-settings-window label:has(> input[type="checkbox"]) > span { min-width: 0; flex: 1; }
 #st-toolbox-settings-window label:has(> input[type="checkbox"]:disabled) { cursor: default; }
 #st-toolbox-settings-window input[type="checkbox"] {
     appearance: none; -webkit-appearance: none; display: inline-block;
-    position: relative; flex: 0 0 38px; width: 38px; min-width: 38px; height: 22px;
+    position: relative; flex: 0 0 38px; width: 38px; min-width: 38px; max-width: 38px;
+    height: 22px; min-height: 22px; max-height: 22px; align-self: center;
+    transform: none; zoom: 1; inset: auto; float: none;
     margin: 0; padding: 0; vertical-align: middle; border-radius: 999px;
     border: 1px solid color-mix(in srgb, var(--tb-text) 35%, transparent);
     background: color-mix(in srgb, var(--tb-text) 16%, var(--tb-surface));
@@ -104,7 +125,8 @@
 }
 #st-toolbox-settings-window input[type="checkbox"]::before {
     content: ''; display: block; position: absolute; top: 3px; left: 3px;
-    width: 14px; height: 14px; border-radius: 50%; background: var(--tb-text);
+    width: 14px; height: 14px; margin: 0; padding: 0; border: 0;
+    transform: none; border-radius: 50%; background: var(--tb-text);
     box-shadow: 0 1px 3px rgb(0 0 0 / .25); transition: transform 150ms;
 }
 #st-toolbox-settings-window input[type="checkbox"]:checked {
@@ -113,6 +135,7 @@
 #st-toolbox-settings-window input[type="checkbox"]:checked::before {
     transform: translateX(16px); background: var(--tb-surface);
 }
+#st-toolbox-settings-window input[type="checkbox"]::after { content: none; }
 #st-toolbox-settings-window input[type="checkbox"]:disabled { opacity: .45; cursor: not-allowed; }
 #st-toolbox-settings-window input[type="checkbox"]:focus-visible { outline-offset: 4px; }
 
@@ -160,12 +183,17 @@
     #st-toolbox-settings-window { width: calc(100vw - 16px); height: calc(100dvh - 24px); border-radius: 14px; }
     #st-toolbox-settings-window .st-toolbox-window-header { padding: 14px 16px; }
     #st-toolbox-settings-window .st-toolbox-window-layout { display: flex; flex-direction: column; }
-    #st-toolbox-settings-window .st-toolbox-window-sidebar { flex-shrink: 0; padding: 10px; border-right: 0; border-bottom: 1px solid var(--tb-border); overflow: visible; }
-    #st-toolbox-settings-window .st-toolbox-window-nav { flex-direction: row; overflow-x: auto; scrollbar-width: thin; padding: 3px; }
-    #st-toolbox-settings-window .st-toolbox-window-tab { flex: 0 0 auto; width: auto; padding: 9px 12px; gap: 8px; font-size: .9em; }
+    #st-toolbox-settings-window .st-toolbox-window-mark { cursor: pointer; min-height: 44px; width: 44px; flex-basis: 44px; }
+    #st-toolbox-settings-window .st-toolbox-window-mark:hover,
+    #st-toolbox-settings-window .st-toolbox-window-mark[aria-expanded="true"] { border-color: var(--tb-accent); background: color-mix(in srgb, var(--tb-accent) 20%, transparent); }
+    #st-toolbox-settings-window .st-toolbox-window-close { width: 44px; height: 44px; }
+    #st-toolbox-settings-window .st-toolbox-window-sidebar { flex: 0 1 auto; min-height: 0; max-height: 55%; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--tb-border); overflow-y: auto; overscroll-behavior: contain; }
+    #st-toolbox-settings-window .st-toolbox-window-nav { flex-direction: column; gap: 4px; }
+    #st-toolbox-settings-window .st-toolbox-window-tab { flex: 0 0 auto; width: 100%; padding: 10px 12px; gap: 10px; font-size: .9em; }
     #st-toolbox-settings-window :is(.st-toolbox-window-nav-label, .st-toolbox-window-sidebar-note) { display: none; }
     #st-toolbox-settings-window .st-toolbox-window-main { flex: 1; }
-    #st-toolbox-settings-window .st-toolbox-window-page { padding: 20px 16px 28px; }
+    #st-toolbox-settings-window .st-toolbox-window-page { padding: 20px 14px 28px; }
+    #st-toolbox-settings-window .st-toolbox-window-feature > .st-toolbox-section { padding: 12px; }
     #st-toolbox-settings-window .st-toolbox-window-page-heading { margin-bottom: 20px; padding-bottom: 16px; }
     #st-toolbox-settings-window .st-toolbox-window-footer { padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
 }

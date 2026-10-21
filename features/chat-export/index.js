@@ -324,7 +324,7 @@ export function createChatExportFeature({ eventSource, eventTypes, settings, sav
             <div class="st-toolbox-section">
                 <label class="checkbox_label"><input type="checkbox">启用对话导出（聊天选项菜单入口）</label>
                 <div class="st-toolbox-row"><button type="button" class="menu_button">导出当前对话</button></div>
-                <p class="st-toolbox-help">支持 char／user／全部、楼层范围、思维链和自选标签清理，输出 TXT、Markdown 或 JSONL。仅在点击探测或导出时扫描；记住上次成功操作的选项，不记住楼层范围。</p>
+                <p class="st-toolbox-help">从聊天选项菜单导出 TXT、Markdown 或 JSONL，可选角色、楼层和清理规则。仅在探测或导出时扫描；记住上次成功的选项，楼层范围除外。</p>
             </div>`;
         container.querySelector('input').addEventListener('change', event => {
             settings.chatExport.enabled = event.target.checked;

@@ -37,7 +37,9 @@ export function createTomatojuiceFeature({ settings, saveSettings }) {
         const label = document.createElement('label');
         const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = settings.tomatojuice.enabled;
         toggle.addEventListener('change', () => { settings.tomatojuice.enabled = toggle.checked; saveSettings(); });
-        label.append(toggle, ' 启用茄汁 / tomatojuice 前端优化（修改后刷新生效；不控制已安装的全站首屏入口）'); container.append(label);
+        label.append(toggle, ' 启用茄汁前端优化'); container.append(label);
+        const help = document.createElement('p'); help.className = 'st-toolbox-help';
+        help.textContent = '修改后刷新生效。此开关不控制已安装的全站首屏入口，请在下方单独管理。'; container.append(help);
         renderEarlyManagement(container, { installBlockedReason: conflict || (legacyConflict() ? '检测到旧 cocktail / cocktail-plus：请停用旧插件及其 bridge/SW 后刷新，再安装首屏入口。' : '') });
         if (conflict) { const warning = document.createElement('p'); warning.textContent = conflict; container.append(warning); return; }
         if (!settings.tomatojuice.enabled) return;
@@ -48,7 +50,7 @@ export function createTomatojuiceFeature({ settings, saveSettings }) {
             const content = document.createElement('div'); content.className = 'st-toolbox-feature-body'; details.append(content); container.append(details);
             try { panel.render(content, ctx); } catch (error) { content.textContent = `面板渲染失败：${error.message}`; }
         }
-        const note = document.createElement('p'); note.textContent = '原 html-render-cache / preset-panel-optimizer 为上游未启用实验模块，保留源码但不自动启用。后端仍需手动部署；首屏接入可在上方面板安装／撤销；更新使用酒馆原生扩展更新，不请求 command-exec。'; container.append(note);
+        const note = document.createElement('p'); note.textContent = '后端需手动部署；首屏入口在上方安装或撤销。更新使用酒馆扩展更新，不执行服务器命令。html-render-cache / preset-panel-optimizer 为实验模块，默认不启用。'; container.append(note);
     }
     return { init, renderSettings, syncSettings() {} };
 }

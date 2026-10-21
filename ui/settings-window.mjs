@@ -1,10 +1,10 @@
 // View-only settings shell. Feature renderers retain ownership of their settings and saves.
 const META = {
-    'qr-bar': { label: '快捷回复栏', icon: 'fa-keyboard', description: '管理 QR 栏的显示与收起方式，让聊天区域更清爽。' },
-    notifications: { label: '回复通知', icon: 'fa-bell', description: '调整提示音、音量与标签页提醒，按自己的节奏接收回复。' },
+    'qr-bar': { label: '快捷回复栏', icon: 'fa-keyboard', description: '设置快捷回复栏的显示和收起。' },
+    notifications: { label: '回复通知', icon: 'fa-bell', description: '设置提示音和标签页提醒。' },
     screenshot: { label: '消息截图', icon: 'fa-camera', description: '设置截图范围、图像质量与导出样式。' },
-    'chat-export': { label: '对话导出', icon: 'fa-file-arrow-down', description: '选择导出入口及默认行为，保留你需要的对话内容。' },
-    tomatojuice: { label: '茄汁 · tomatojuice', icon: 'fa-gauge-high', description: '前端优化、后端加速与首屏接入，在一个地方管理。' },
+    'chat-export': { label: '对话导出', icon: 'fa-file-arrow-down', description: '设置导出入口，支持按角色和楼层导出。' },
+    tomatojuice: { label: '茄汁 · tomatojuice', icon: 'fa-gauge-high', description: '管理前端优化、后端加速和首屏入口。' },
 };
 
 export function createSettingsWindow(features, { document: doc = document } = {}) {
@@ -20,29 +20,52 @@ export function createSettingsWindow(features, { document: doc = document } = {}
     dialog.setAttribute('aria-labelledby', 'st-toolbox-window-title');
     const header = make('header', 'st-toolbox-window-header');
     const brand = make('div', 'st-toolbox-window-brand');
-    const mark = make('span', 'st-toolbox-window-mark'); mark.append(icon('fa-toolbox'));
+    const mark = make('button', 'st-toolbox-window-mark'); mark.type = 'button'; mark.append(icon('fa-toolbox'));
+    mark.setAttribute('aria-controls', 'st-toolbox-window-sidebar');
     const brandText = make('div');
     const title = make('h2', '', 'ST Toolbox'); title.id = 'st-toolbox-window-title';
-    brandText.append(title, make('span', 'st-toolbox-window-subtitle', '工具箱设置'));
+    const subtitle = make('span', 'st-toolbox-window-subtitle', '工具箱设置');
+    brandText.append(title, subtitle);
     brand.append(mark, brandText);
     const closeButton = make('button', 'st-toolbox-window-close');
     closeButton.type = 'button'; closeButton.title = '关闭设置'; closeButton.setAttribute('aria-label', '关闭设置'); closeButton.append(icon('fa-xmark'));
     header.append(brand, closeButton);
     const layout = make('div', 'st-toolbox-window-layout');
     const sidebar = make('aside', 'st-toolbox-window-sidebar');
+    sidebar.id = 'st-toolbox-window-sidebar';
     const nav = make('div', 'st-toolbox-window-nav');
     nav.setAttribute('role', 'tablist'); nav.setAttribute('aria-label', '设置分类'); nav.setAttribute('aria-orientation', 'vertical');
     sidebar.append(make('p', 'st-toolbox-window-nav-label', '功能设置'), nav, make('p', 'st-toolbox-window-sidebar-note', '专注对话，工具随行。'));
     const main = make('main', 'st-toolbox-window-main');
     layout.append(sidebar, main);
-    const footer = make('footer', 'st-toolbox-window-footer', '各项修改沿用酒馆的保存机制；需刷新的选项会单独提示。');
+    const footer = make('footer', 'st-toolbox-window-footer', '修改会自动保存；需刷新的选项会单独提示。');
     dialog.append(header, layout, footer);
     doc.body.append(dialog);
     let activeId = '', returnFocus = null, disposed = false, backdropDown = false;
     const entries = new Map();
     const media = doc.defaultView?.matchMedia?.('(max-width: 640px)');
-    const updateOrientation = () => nav.setAttribute('aria-orientation', media?.matches ? 'horizontal' : 'vertical');
+    let sidebarExpanded = false;
+    function setSidebar(expanded, restore = false) {
+        sidebarExpanded = Boolean(media?.matches && expanded);
+        sidebar.hidden = Boolean(media?.matches && !sidebarExpanded);
+        mark.setAttribute('aria-expanded', String(!media?.matches || sidebarExpanded));
+        mark.setAttribute('aria-label', sidebarExpanded ? '收起设置分类' : '展开设置分类');
+        mark.title = media?.matches ? (sidebarExpanded ? '收起设置分类' : '展开设置分类') : '工具箱';
+        if (restore && dialog.open) mark.focus({ preventScroll: true });
+    }
+    function updateOrientation() {
+        const focusInSidebar = sidebar.contains(doc.activeElement);
+        const focusOnMark = doc.activeElement === mark;
+        nav.setAttribute('aria-orientation', 'vertical');
+        mark.disabled = !media?.matches;
+        mark.firstElementChild.className = `fa-solid ${media?.matches ? 'fa-bars' : 'fa-toolbox'}`;
+        subtitle.textContent = media?.matches ? (entries.get(activeId)?.label || '点击图标选择分类') : '工具箱设置';
+        setSidebar(false, Boolean(media?.matches && focusInSidebar));
+        // Desktop restores its selected tab if the now-disabled mobile toggle held focus.
+        if (!media?.matches && focusOnMark && dialog.open) entries.get(activeId)?.button.focus({ preventScroll: true });
+    }
     updateOrientation(); media?.addEventListener?.('change', updateOrientation);
+    mark.addEventListener('click', () => setSidebar(!sidebarExpanded));
 
     function render(entry) {
         if (entry.rendered) return;
@@ -61,6 +84,7 @@ export function createSettingsWindow(features, { document: doc = document } = {}
         const next = entries.get(id);
         if (!next || disposed) return;
         activeId = id;
+        if (media?.matches) subtitle.textContent = next.label;
         for (const [key, entry] of entries) {
             const selected = key === id;
             entry.button.setAttribute('aria-selected', String(selected));
@@ -88,8 +112,11 @@ export function createSettingsWindow(features, { document: doc = document } = {}
             heading.append(make('h3', '', meta.label), make('p', '', meta.description));
             const content = make('div', 'st-toolbox-window-feature');
             panel.append(heading, content); nav.append(button); main.append(panel);
-            entries.set(feature.id, { feature, button, panel, content, rendered: false });
-            button.addEventListener('click', () => select(feature.id));
+            entries.set(feature.id, { feature, label: meta.label, button, panel, content, rendered: false });
+            button.addEventListener('click', () => {
+                select(feature.id);
+                if (media?.matches) { setSidebar(false); panel.focus({ preventScroll: true }); }
+            });
         }
         if (!activeId) activeId = nextFeatures[0]?.id || '';
         if (dialog.open) select(activeId);
@@ -104,16 +131,23 @@ export function createSettingsWindow(features, { document: doc = document } = {}
             }
             dialog.showModal();
         }
-        select(activeId, true);
+        setSidebar(false);
+        select(activeId, !media?.matches);
+        if (media?.matches) mark.focus({ preventScroll: true });
     }
     function restoreFocus() {
         // A queued close event from an earlier opening must not steal focus from a reopened dialog.
         if (!dialog.open && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
     }
     function close() {
-        if (dialog.open) { dialog.close(); restoreFocus(); }
+        if (dialog.open) { setSidebar(false); dialog.close(); restoreFocus(); }
     }
     closeButton.addEventListener('click', close);
+    dialog.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && sidebarExpanded) {
+            event.preventDefault(); event.stopPropagation(); setSidebar(false, true);
+        }
+    });
     dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
     dialog.addEventListener('close', restoreFocus);
     // Only a pointer beginning AND ending on the backdrop closes the window.

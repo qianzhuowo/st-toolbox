@@ -1173,7 +1173,7 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
                     <span>仅失焦/后台时播放声音</span>
                 </label>
             </div>
-            <p class="st-toolbox-help">正常可见回复完成且生成链持续空闲后播放成功音；流式失败或进入空闲后持续没有有效回复时播放错误音；手动停止不会播放错误音。群聊整轮只提醒一次。若 SillyTavern 自带 Message Sound 也已启用，两套声音会叠加。</p>
+            <p class="st-toolbox-help">回复完成后播放成功音，失败或迟迟无有效回复时播放错误音；手动停止不报错，群聊每轮只提醒一次。酒馆自带 Message Sound 同时开启时，声音会叠加。</p>
             <label>闪烁图标</label>
             <div class="st-toolbox-row st-toolbox-flash-icon-row">
                 <span class="st-toolbox-flash-icon-preview" title="闪烁时交替显示的两张图标">
@@ -1185,7 +1185,7 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
                 <button id="st-toolbox-reset-flash-icon" class="menu_button st-toolbox-icon-button" type="button" title="恢复默认图标" hidden><i class="fa-solid fa-rotate-left"></i></button>
                 <input id="st-toolbox-flash-icon-file" type="file" accept="image/*,.ico" hidden>
             </div>
-            <p class="st-toolbox-help">默认使用 vertin-tips 的两张图标交替闪烁；上传自定义图标后，会与页面原有 favicon 交替。图片会被缩放为 64×64 PNG 存入设置（不超过 96 KB），支持 png/jpg/webp/gif/svg/ico。</p>
+            <p class="st-toolbox-help">默认交替显示两张图标；自定义图标与原标签页图标交替。支持常见图片格式，保存为 64×64 PNG（最多 96 KB）。</p>
             <label for="st-toolbox-success-sound">成功提示音</label>
             <div class="st-toolbox-row">
                 <select id="st-toolbox-success-sound" class="text_pole"></select>
@@ -1206,7 +1206,7 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
                 <span>音量：<output id="st-toolbox-volume-value">50</output>%</span>
                 <input id="st-toolbox-volume" type="range" min="0" max="100" step="1">
             </label>
-            <p class="st-toolbox-help">自定义音频仅保存在当前浏览器的 IndexedDB 中，不会上传到服务器。单个文件上限 15 MB，最多 30 个；列表只常驻元数据，播放时才读取 Blob。</p>
+            <p class="st-toolbox-help">音频仅存于当前浏览器，不上传服务器；清除浏览器数据会丢失。每个最多 15 MB，共 30 个。</p>
         `;
 
         const find = selector => section.querySelector(selector);
