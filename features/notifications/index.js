@@ -1186,16 +1186,16 @@ export function createNotificationsFeature({ eventSource, eventTypes, settings, 
                 <input id="st-toolbox-flash-icon-file" type="file" accept="image/*,.ico" hidden>
             </div>
             <p class="st-toolbox-help">默认交替显示两张图标；自定义图标与原标签页图标交替。支持常见图片格式，保存为 64×64 PNG（最多 96 KB）。</p>
-            <label for="st-toolbox-success-sound">成功提示音</label>
             <div class="st-toolbox-row">
+                <label for="st-toolbox-success-sound">成功提示音</label>
                 <select id="st-toolbox-success-sound" class="text_pole"></select>
                 <button id="st-toolbox-test-success" class="menu_button st-toolbox-icon-button" type="button" title="试听成功音"><i class="fa-solid fa-play"></i></button>
                 <button id="st-toolbox-upload-success" class="menu_button st-toolbox-icon-button" type="button" title="上传成功音"><i class="fa-solid fa-upload"></i></button>
                 <button id="st-toolbox-delete-success" class="menu_button st-toolbox-icon-button" type="button" title="删除所选自定义成功音" hidden><i class="fa-solid fa-trash"></i></button>
                 <input id="st-toolbox-success-file" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" hidden>
             </div>
-            <label for="st-toolbox-error-sound">错误提示音</label>
             <div class="st-toolbox-row">
+                <label for="st-toolbox-error-sound">错误提示音</label>
                 <select id="st-toolbox-error-sound" class="text_pole"></select>
                 <button id="st-toolbox-test-error" class="menu_button st-toolbox-icon-button" type="button" title="试听错误音"><i class="fa-solid fa-play"></i></button>
                 <button id="st-toolbox-upload-error" class="menu_button st-toolbox-icon-button" type="button" title="上传错误音"><i class="fa-solid fa-upload"></i></button>
