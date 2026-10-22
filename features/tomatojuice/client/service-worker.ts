@@ -8,7 +8,7 @@ function getServiceWorkerScriptURL(reg: ServiceWorkerRegistration) {
 
 function isOurRegistration(reg: ServiceWorkerRegistration) {
   const scriptURL = getServiceWorkerScriptURL(reg);
-  return scriptURL.includes(`${API_PREFIX}/sw.js`);
+  try { const url = new URL(scriptURL); return url.origin === location.origin && url.pathname === `${API_PREFIX}/sw.js`; } catch { return false; }
 }
 
 export async function refreshServiceWorkerState() {
@@ -51,4 +51,25 @@ export async function unregisterServiceWorker() {
   }
   await refreshServiceWorkerState();
   log(`已注销 ${count} 个性能优化器 Service Worker；刷新页面后完全恢复原接口`);
+}
+
+export async function inspectMigrationWorkers() {
+  if (!navigator.serviceWorker?.getRegistrations) return [];
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  return registrations.flatMap(registration => {
+    const workers = [registration.active, registration.waiting, registration.installing].filter(Boolean);
+    const urls = workers.map(worker => worker!.scriptURL);
+    const recognized = urls.length > 0 && urls.every(value => {
+      try { const url = new URL(value); return url.origin === location.origin && (url.pathname === '/api/plugins/cocktail-plus/sw.js' || url.pathname === API_PREFIX + '/sw.js'); } catch { return false; }
+    });
+    return recognized ? [{ registration, urls }] : [];
+  });
+}
+export async function cleanupMigrationWorkers() {
+  const entries = await inspectMigrationWorkers();
+  if (!entries.length) return '未发现可识别的 cocktail-plus / tomatojuice SW。其他 SW 不会清理。';
+  if (!globalThis.confirm('仅注销以下同源已识别 SW，不会清理其他 SW 或缓存。请先保存工作，完成 HTML 修复后再刷新。\n' + entries.flatMap(entry => entry.urls).join('\n'))) return '已取消';
+  let count = 0;
+  for (const entry of entries) if (await entry.registration.unregister()) count++;
+  return '已注销 ' + count + ' 个已识别 SW；当前页面可能仍受控，保存工作并完成 HTML 修复后刷新。';
 }

@@ -23,10 +23,12 @@ export async function startBackendClient() {
   await fullProbe();
   if (!state.backend?.ok) return;
   if (!(globalThis as any).__tomatojuiceEarlyBridge) {
-    // Late fetch/template acceleration; only the explicit installer can optimize pre-module startup.
+    // Optional late read acceleration. Never gate native startup or require the script to load.
     await new Promise<void>((resolve) => {
-      const script = document.createElement('script'); script.src = `${API_PREFIX}/early/bridge.js`;
-      script.onload = () => resolve(); script.onerror = () => { console.warn('[tomatojuice] bridge unavailable; native requests retained'); resolve(); };
+      const timer = setTimeout(resolve, 2500);
+      const done = () => { clearTimeout(timer); resolve(); };
+      const script = document.createElement('script'); script.async = true; script.src = `${API_PREFIX}/early/bridge.js`;
+      script.onload = done; script.onerror = () => { console.warn('[tomatojuice] bridge unavailable; native requests retained'); done(); };
       document.head.append(script);
     });
   }

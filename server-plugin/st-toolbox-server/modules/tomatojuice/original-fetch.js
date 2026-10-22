@@ -102,12 +102,13 @@ function shouldSkipTlsVerifyForInternalFetch(url) {
         && isLoopbackHostname(url.hostname);
 }
 
-function nodeRequestWithProgress(url, method, headers, bodyText, onProgress, startedAt, { skipTlsVerify = false } = {}) {
+function nodeRequestWithProgress(url, method, headers, bodyText, onProgress, startedAt, { skipTlsVerify = false, signal } = {}) {
     return new Promise((resolve, reject) => {
         const client = url.protocol === 'https:' ? https : http;
         const requestOptions = {
             method,
             headers,
+            signal,
         };
         if (url.protocol === 'https:' && skipTlsVerify) {
             requestOptions.rejectUnauthorized = false;
@@ -178,10 +179,13 @@ export async function fetchOriginal(ctx, endpoint, options = {}) {
     const startedAt = Date.now();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+    const abort = () => controller.abort(options.signal.reason);
+    if (options.signal?.aborted) abort();
+    options.signal?.addEventListener('abort', abort, { once: true });
     const onProgress = options?.onProgress;
     try {
         if (shouldSkipTlsVerifyForInternalFetch(url)) {
-            return await nodeRequestWithProgress(url, method, headers, ctx.bodyText, onProgress, startedAt, { skipTlsVerify: true });
+            return await nodeRequestWithProgress(url, method, headers, ctx.bodyText, onProgress, startedAt, { skipTlsVerify: true, signal: controller.signal });
         }
 
         const fetchOptions = { method, headers, redirect: 'manual', signal: controller.signal };
@@ -196,5 +200,6 @@ export async function fetchOriginal(ctx, endpoint, options = {}) {
         return { ok: response.ok, status: response.status, statusText: response.statusText, headers: pickResponseHeaders(response), bodyText, durationMs, bytesReceived, totalBytes };
     } finally {
         clearTimeout(timer);
+        options.signal?.removeEventListener('abort', abort);
     }
 }

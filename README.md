@@ -6,11 +6,11 @@
 2. **回复提示通知**：成功/错误提示音、自定义本地音频、标签页标题闪烁，以及生成事件去重。
 3. **消息截图**：单条、相邻范围和任意多选截图，显式合成 SillyTavern 与 Moonlit Echoes 背景。
 4. **对话导出**：按 char／user／全部及原始楼层筛选，探测并清理自选标签与思维链，导出 TXT、Markdown 或 JSONL。
-5. **茄汁 / tomatojuice**：迁入上游 cocktail / cocktail-plus（Limerence）的启动、聊天渲染、拖拽、正则、UI 优化；可选通用 `st-toolbox-server` 提供持久缓存、差量保存、early bridge 与 SW。
+5. **茄汁 / tomatojuice**：迁入上游 cocktail / cocktail-plus（Limerence）的启动、聊天渲染、拖拽、正则、UI 优化；可选通用 `st-toolbox-server` 提供持久缓存与可失败的只读桥接；默认使用原生模块和保存请求，不需要 SW。
 
-茄汁 / tomatojuice 的首屏优化及 dynamic-styles 修复在设置面板首次显示时自动只读检查，重新打开或切回茄汁分类也会重新检查；仍可手动点击 **检查首屏状态**。安装请点击 **安装／修复首屏接入** 并明确确认，无需终端；撤销也在同一管理区。需先部署新版后端，使用管理员身份及有效酒馆 CSRF 会话。此操作会备份并修改所有用户共用的 `public/index.html`，手动刷新后生效；不改核心 JS。详见[部署与撤销说明](docs/tomatojuice-migration.md)。
+茄汁 / tomatojuice 的“迁移诊断与可选只读加速”默认只读检查状态。主要操作为检查、可选安装、恢复原生；旧版 HTML / SW 清理位于“旧版迁移 / 高级恢复”，均需明确确认。不再写入核心模块代理或 import map；桥接异步加载、失败限时回退，SW 无需注册。先修复旧 HTML 核心 URL 再删除旧后端，避免新面板启动前即黑屏。详见[迁移与恢复说明](docs/tomatojuice-migration.md)。
 
-> 茄汁 / tomatojuice 的完整功能对照、**旧插件冲突处理、手动部署/回滚和四项日志归因**见 [迁移与部署文档](docs/tomatojuice-migration.md)。本仓库不会自动部署后端、修改运行中核心或注册根 SW。
+> 茄汁 / tomatojuice 的完整功能对照、**旧插件冲突处理、手动部署/恢复和验收边界**见 [迁移与部署文档](docs/tomatojuice-migration.md)。本仓库不会自动部署后端、修改运行中核心或注册根 SW。
 
 ## 安装位置
 

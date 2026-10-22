@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
-import { getEarlyBridgeStatus, installEarlyBridge, uninstallEarlyBridge } from './early-bridge.js';
+import { getEarlyBridgeStatus, installEarlyBridge, uninstallEarlyBridge, cleanupLegacyBridge } from './early-bridge.js';
 import { getServerRoot } from './utils.js';
 import { config } from './config.js';
+import { inspectLegacyHtml, cleanLegacyHtml } from './legacy-migration.js';
 import { validateRequest } from './security.js';
 
 const fail = (message, status = 409) => Object.assign(new Error(message), { status });
@@ -55,7 +56,10 @@ export function createEarlyBridgeManager(serverRoot = getServerRoot()) {
         const malformed = raw.markerStartCount !== raw.markerEndCount || raw.markerStartCount > 1
             || (raw.markerStartCount === 1 && html.indexOf('<!-- tomatojuice early bridge start -->') > html.indexOf('<!-- tomatojuice early bridge end -->'))
             || raw.scriptIdCount > 1 || (raw.scriptIdCount > 0 && raw.markerStartCount === 0);
-        return { root, raw, malformed, conflict: LEGACY.test(html) ? '检测到旧 cocktail-plus 首屏入口，请先用旧工具撤销，避免叠加。' : null };
+        const legacy = inspectLegacyHtml(html);
+        let legacyCleanable = false;
+        if (legacy.detected) { try { cleanLegacyHtml(html); legacyCleanable = true; } catch {} }
+        return { root, raw, malformed, legacy, legacyCleanable, conflict: LEGACY.test(html) ? '检测到旧 cocktail-plus 首屏入口，请检查迁移诊断，确认清理可识别遗留，避免叠加。' : null };
     }
     function status(req) {
         const admin = req ? req.user?.profile?.admin === true : true;
@@ -64,14 +68,14 @@ export function createEarlyBridgeManager(serverRoot = getServerRoot()) {
             reason: !admin ? '仅酒馆管理员可以安装或撤销全局首屏入口。' : !csrfReady ? '需要有效的酒馆 CSRF 会话。请刷新页面；如已关闭 CSRF 保护，请重新开启后重启。' : '',
             proxyEnabled: !!config.moduleProxyEnabled, bridgeEnabled: !!config.enabled && !!config.earlyBridgeEnabled };
         try {
-            const { raw, malformed, conflict } = inspect();
-            return { ...base, installed: raw.installed, needsRepair: raw.installed && !raw.upToDate, conflict,
+            const { raw, malformed, conflict, legacy, legacyCleanable } = inspect();
+            return { ...base, installed: raw.installed, legacy, legacyCleanable, needsRepair: raw.installed && !raw.upToDate, conflict,
                 canManage: base.canManage && !malformed,
                 reason: malformed ? '首屏入口标记不完整或重复；请使用备份手动核对 HTML，不能安全自动修改。' : base.reason };
         } catch (error) { return { ...base, canManage: false, reason: safeError(error).message }; }
     }
     function apply(action) {
-        if (!['install', 'uninstall'].includes(action)) throw fail('未知首屏管理操作。', 400);
+        if (!['install', 'uninstall', 'cleanup-legacy'].includes(action)) throw fail('未知首屏管理操作。', 400);
         let lock, lockFile;
         try {
             const { root, malformed, conflict } = inspect();
@@ -81,7 +85,7 @@ export function createEarlyBridgeManager(serverRoot = getServerRoot()) {
             try { lock = fs.openSync(lockFile, 'wx', 0o600); }
             catch (error) { if (error.code === 'EEXIST') throw fail('另一个首屏操作正在执行；若进程曾异常退出，请确认无操作后手动清理 index.html.st-toolbox.lock。'); throw error; }
             // Sync operations do not yield between validation, backup and rename. The lock also covers the CLI.
-            const result = action === 'install' ? installEarlyBridge({ root, noBackup: false }) : uninstallEarlyBridge({ root, noBackup: false });
+            const result = action === 'cleanup-legacy' ? cleanupLegacyBridge({ root }) : action === 'install' ? installEarlyBridge({ root, noBackup: false }) : uninstallEarlyBridge({ root, noBackup: false });
             if (!result.ok) throw fail('首屏入口操作未完成；原始入口未被确认更新。', 500);
             return { ok: true, changed: result.changed, backupCreated: !!result.backup, refreshRequired: true };
         } catch (error) { throw safeError(error); }
@@ -95,7 +99,7 @@ export function registerEarlyManagement(route, manager = createEarlyBridgeManage
         validateRequest(req);
         res.json({ ok: true, management: manager.status(req) });
     });
-    for (const action of ['install', 'uninstall']) {
+    for (const action of ['install', 'uninstall', 'cleanup-legacy']) {
         route('post', `/early/${action}`, (req, res) => {
             validateRequest(req);
             if (req.user.profile.admin !== true) throw fail('仅酒馆管理员可以修改全局首屏入口。', 403);

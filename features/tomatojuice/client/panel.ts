@@ -1,7 +1,6 @@
 import { state } from './state';
 import { ensureLocalSettings } from './settings';
 import { fullProbe, refreshStatus, warm, clearCache, refreshBrowserLogs, clearBrowserLogs } from './api';
-import { registerServiceWorker, unregisterServiceWorker } from './service-worker';
 export function renderPanel(host?: HTMLElement) {
   const root = host || document.getElementById('tomatojuice-backend-panel');
   if (!root) return;
@@ -11,11 +10,14 @@ export function renderPanel(host?: HTMLElement) {
   status.textContent = state.backend?.ok ? 'st-toolbox-server：可用；缓存按用户持久化、按文件签名失效。' : '后端未安装：使用酒馆原生请求，前端优化仍可使用。';
   root.append(status);
   const note = document.createElement('p');
-  note.textContent = '首屏加速可在上方管理区点击安装，管理员确认后生效于下次刷新；设置与聊天差量保存保留原生保存和冲突检查。SW 为可选项，不自动覆盖其他根作用域 SW。更新请使用酒馆原生扩展更新；后端手动复制更新。';
+  note.textContent = '默认保留原生模块与保存请求；可选桥接仅加速只读请求，限时失败回退。无需注册 SW。后端手动更新，不执行服务器命令。';
   root.append(note);
+  const advanced = document.createElement('details');
+  const summary = document.createElement('summary'); summary.textContent = '缓存与诊断（高级）';
+  advanced.append(summary); root.append(advanced);
   const actions = document.createElement('div'); actions.className = 'st-toolbox-backend-actions';
   actions.setAttribute('role', 'group'); actions.setAttribute('aria-label', '后端与缓存操作');
-  root.append(actions);
+  advanced.append(actions);
   const result = document.createElement('pre'); result.className = 'st-toolbox-backend-result';
   result.style.cssText = 'max-height:24em;overflow:auto;white-space:pre-wrap';
   const show = () => { result.textContent = JSON.stringify({ cache: state.backend?.status, settingsGet: state.backend?.settingsGet, settingsSave: state.backend?.settingsSave, chatSave: state.backend?.chatSave, sw: state.sw }, null, 2); };
@@ -27,17 +29,12 @@ export function renderPanel(host?: HTMLElement) {
   add('预热（不强制重建）', () => warm(true), true);
   add('清理当前用户缓存', () => clearCache(), true);
   add('刷新状态', () => refreshStatus(), true);
-  add('注册可选 SW', async () => {
-    if (!confirm('SW 将接管本站根作用域。确认没有其他插件的 SW，并继续？')) return;
-    await registerServiceWorker();
-  }, true);
-  add('注销 tomatojuice SW', () => unregisterServiceWorker());
   add('读取当前用户日志', async () => { const logs = await refreshBrowserLogs(); return logs?.text || '无日志（默认不采集浏览器全局日志）'; }, true);
   add('清理当前用户日志', () => clearBrowserLogs(), true);
   const settings = ensureLocalSettings();
   const label = document.createElement('label'); label.className = 'checkbox_label';
   const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = settings.autoWarm;
   checkbox.addEventListener('change', async () => { const { updateLocalBool } = await import('./settings'); updateLocalBool('autoWarm', checkbox.checked); });
-  label.append(checkbox, ' 启动时补充预热（有效缓存不重建）'); root.append(label);
-  root.append(result); show();
+  label.append(checkbox, ' 启动时补充预热（有效缓存不重建）'); advanced.append(label);
+  advanced.append(result); show();
 }

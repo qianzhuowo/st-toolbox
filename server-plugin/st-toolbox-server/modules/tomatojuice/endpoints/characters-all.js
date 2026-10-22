@@ -24,11 +24,12 @@ function resolveScanConcurrency(config) {
     return Math.max(1, Math.min(32, Math.trunc(raw)));
 }
 
-async function mapWithConcurrency(items, limit, iterator) {
+async function mapWithConcurrency(items, limit, iterator, signal) {
     const size = Math.max(1, Math.min(limit, items.length));
     let cursor = 0;
     const workers = new Array(size).fill(null).map(async () => {
         while (true) {
+            signal?.throwIfAborted();
             const index = cursor++;
             if (index >= items.length) break;
             await iterator(items[index], index);
@@ -130,7 +131,7 @@ function calculateDataSize(data) {
     }
 }
 
-async function readCharacterCardJson(filePath) {
+async function readCharacterCardJson(filePath, signal) {
     const handle = await fs.promises.open(filePath, 'r');
     try {
         const signature = Buffer.alloc(PNG_SIGNATURE.length);
@@ -147,6 +148,7 @@ async function readCharacterCardJson(filePath) {
         // Walk chunk-by-chunk. We only ever read the 8-byte chunk header plus the small
         // tEXt payloads; IDAT and other large chunks are skipped by advancing the offset.
         while (true) {
+            signal?.throwIfAborted();
             const headerRead = await handle.read(header, 0, PNG_CHUNK_HEADER_BYTES, offset);
             if (headerRead.bytesRead < PNG_CHUNK_HEADER_BYTES) break;
 
@@ -219,10 +221,13 @@ async function makeShallowCharacterFromCard(raw, avatarFileName, stat, directori
     });
 }
 
-async function processCharacterFileDirect(fileName, directories) {
+async function processCharacterFileDirect(fileName, directories, signal) {
     const filePath = path.join(directories.characters, fileName);
+    signal?.throwIfAborted();
     const stat = await fs.promises.stat(filePath);
-    const jsonText = await readCharacterCardJson(filePath);
+    signal?.throwIfAborted();
+    const jsonText = await readCharacterCardJson(filePath, signal);
+    signal?.throwIfAborted();
     const raw = JSON.parse(jsonText);
     return { character: await makeShallowCharacterFromCard(raw, fileName, stat, directories), stat };
 }
@@ -232,6 +237,8 @@ async function fetchCharactersAllDirect(ctx, config, options = {}) {
 
     const startedAt = Date.now();
     const onProgress = options?.onProgress;
+    const signal = options?.signal;
+    signal?.throwIfAborted();
     const directories = ctx.directories || {};
     const charactersDir = directories.characters;
     if (!charactersDir) throw new Error('Characters directory is not available');
@@ -255,7 +262,7 @@ async function fetchCharactersAllDirect(ctx, config, options = {}) {
 
     await mapWithConcurrency(pngFiles, concurrency, async (fileName) => {
         try {
-            const { character, stat } = await processCharacterFileDirect(fileName, directories);
+            const { character, stat } = await processCharacterFileDirect(fileName, directories, signal);
             if (character?.name) characters.push(character);
             processedBytes += stat?.size || 0;
         } catch (error) {
@@ -269,7 +276,8 @@ async function fetchCharactersAllDirect(ctx, config, options = {}) {
                 callProgress(onProgress, progressPatch('reading', startedAt, processedBytes, null, { count: processed, totalCount: pngFiles.length, errors }));
             }
         }
-    });
+    }, signal);
+    signal?.throwIfAborted();
 
     if (errors > 0) return null; // Never persist an incomplete list: let the native endpoint handle unusual cards.
     // Concurrency makes completion order non-deterministic; keep a stable, avatar-sorted list.

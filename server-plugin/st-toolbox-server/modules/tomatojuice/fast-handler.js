@@ -27,15 +27,22 @@ export async function refreshEntry(ctx, endpointKey, reason = 'refresh') {
         return await inflight.get(key);
     }
 
-    const promise = (async () => {
+    const controller = new AbortController();
+    let timer;
+    const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => { controller.abort(new Error('Shared cache build deadline exceeded')); reject(controller.signal.reason); }, 10000);
+    });
+    const work = (async () => {
         stats.refreshes++;
         updateProgress({ phase: 'starting', reason, startedAt, bytesReceived: 0, totalBytes: null, speedBps: 0, percent: null, etaMs: null, status: null, error: null });
         const signature = endpoint.getSignature(ctx);
         let result = null;
         if (typeof endpoint.fetchForCache === 'function') {
-            result = await endpoint.fetchForCache(ctx, config, { onProgress: updateProgress, startedAt, reason });
+            result = await endpoint.fetchForCache(ctx, config, { onProgress: updateProgress, startedAt, reason, signal: controller.signal });
         }
-        if (!result) result = await fetchOriginal(ctx, endpoint, { onProgress: updateProgress });
+        controller.signal.throwIfAborted();
+        if (!result) result = await fetchOriginal(ctx, endpoint, { onProgress: updateProgress, signal: controller.signal });
+        controller.signal.throwIfAborted();
         if (result.ok && result.status >= 200 && result.status < 300) {
             const now = Date.now();
             updateProgress({ phase: 'transforming', status: result.status, bytesReceived: result.bytesReceived ?? Buffer.byteLength(result.bodyText || '', 'utf8'), totalBytes: result.totalBytes ?? null, etaMs: 0 });
@@ -78,7 +85,8 @@ export async function refreshEntry(ctx, endpointKey, reason = 'refresh') {
         updateProgress({ phase: 'error', status: result.status, bytesReceived: result.bytesReceived ?? Buffer.byteLength(result.bodyText || '', 'utf8'), totalBytes: result.totalBytes ?? null, error: `HTTP ${result.status || 0}` });
         scheduleClearRefreshProgress(key);
         return { result, entry: null, cached: false };
-    })()
+    })();
+    const promise = Promise.race([work, deadline])
         .catch((error) => {
             stats.errors++;
             stats.lastError = error instanceof Error ? error.message : String(error);
@@ -86,7 +94,10 @@ export async function refreshEntry(ctx, endpointKey, reason = 'refresh') {
             scheduleClearRefreshProgress(key);
             throw error;
         })
-        .finally(() => inflight.delete(key));
+        .finally(() => clearTimeout(timer));
+    // Do not launch replacement work while an uncancellable OS filesystem call is pending.
+    // The shared rejected promise provides immediate bounded errors until the worker settles.
+    void work.finally(() => { if (inflight.get(key) === promise) inflight.delete(key); }).catch(() => {});
 
     inflight.set(key, promise);
     return await promise;
@@ -241,7 +252,17 @@ export async function handleFast(req, res, endpointKey) {
     stats.misses++;
     try {
         logFastDecision(endpointKey, 'blocking-refresh-start', { requestId: ctx.requestId, hasEntry: !!entry, durationMs: Date.now() - startedAt });
-        const { result, entry: refreshedEntry } = await refreshEntry(ctx, endpointKey, entry ? 'blocking-refresh' : 'miss');
+        // Bound the optional fast route, not the native request. Cache building may finish in
+        // background; a timeout returns an error so clients fall back without a synthetic [].
+        let deadline;
+        let refreshed;
+        try {
+            refreshed = await Promise.race([
+                refreshEntry(ctx, endpointKey, entry ? 'blocking-refresh' : 'miss'),
+                new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Fast cache build deadline exceeded; use native endpoint')), config.blockCharactersAllOnMiss ? 10000 : 1500); }),
+            ]);
+        } finally { clearTimeout(deadline); }
+        const { result, entry: refreshedEntry } = refreshed;
         if (refreshedEntry) {
             logFastDecision(endpointKey, 'blocking-refresh-entry-return', { requestId: ctx.requestId, status: refreshedEntry.status, durationMs: Date.now() - startedAt, bodyBytes: Buffer.byteLength(refreshedEntry.bodyText || '', 'utf8') });
             return sendEntry(res, refreshedEntry, entry ? 'REFRESH' : 'MISS');

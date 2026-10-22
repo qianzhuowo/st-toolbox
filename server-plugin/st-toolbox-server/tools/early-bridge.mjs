@@ -2,8 +2,8 @@
 import { createEarlyBridgeManager } from '../modules/tomatojuice/early-management.js';
 // Local recovery tool; same guarded fixed operations as the administrator UI, never exec/shell.
 const [action, serverRoot, confirmation] = process.argv.slice(2);
-if (!['status', 'install', 'uninstall'].includes(action) || !serverRoot || action !== 'status' && confirmation !== '--apply') {
-    console.error('Usage: node early-bridge.mjs status|install|uninstall <SillyTavern-root> [--apply]');
+if (!['status', 'install', 'uninstall', 'cleanup-legacy'].includes(action) || !serverRoot || action !== 'status' && confirmation !== '--apply') {
+    console.error('Usage: node early-bridge.mjs status|install|uninstall|cleanup-legacy <SillyTavern-root> [--apply]');
     process.exit(2);
 }
 try {
