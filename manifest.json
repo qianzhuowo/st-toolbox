@@ -6,6 +6,6 @@
     "js": "index.js",
     "css": "style.css",
     "author": "Qianzhuo",
-    "version": "1.3.2",
+    "version": "1.3.3",
     "description": "QR 栏、通知、截图、对话导出与 Tomatojuice 启动/交互优化；支持可选通用 st-toolbox-server 后端。"
 }

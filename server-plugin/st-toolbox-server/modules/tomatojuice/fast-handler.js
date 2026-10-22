@@ -5,7 +5,8 @@ import { ENDPOINTS } from './endpoint-registry.js';
 import { fetchOriginal } from './original-fetch.js';
 import { makeRequestContext } from './request-context.js';
 import { nextRequestId, stats } from './stats.js';
-import { generations, getCacheKey, getCachedEntry, inflight, memoryCache, scheduleClearRefreshProgress, setRefreshProgress, writeDiskEntry } from './cache-store.js';
+import { getRequestBudget, SHARED_BUILD_TIMEOUT_MS } from './budgets.js';
+import { cacheEpoch, generations, getCacheKey, getCachedEntry, inflight, memoryCache, scheduleClearRefreshProgress, setRefreshProgress, writeDiskEntry } from './cache-store.js';
 
 export function makeEntryFromBody(ctx, endpointKey, status, statusText, headers, bodyText, signature, durationMs, transform = null) {
     const now = Date.now();
@@ -16,29 +17,54 @@ function defaultTransformBodyForCache(bodyText) {
     return { bodyText, transformed: false, sourceBytes: Buffer.byteLength(bodyText || '', 'utf8'), cachedBytes: Buffer.byteLength(bodyText || '', 'utf8') };
 }
 
-export async function refreshEntry(ctx, endpointKey, reason = 'refresh') {
+function isStateCurrent(ctx, endpointKey, state) {
+    return state.epoch === cacheEpoch
+        && state.generation === (generations.get(`${ctx.userKey}:${endpointKey}`) || 0)
+        && state.cacheKey === getCacheKey(ctx, endpointKey);
+}
+
+function disabledWarmResult(endpoint) {
+    if (!config.enabled || !config[endpoint.configKey]) return { result: null, entry: null, cached: false, skipped: true, reason: !config.enabled ? 'disabled' : 'endpoint-disabled' };
+    return null;
+}
+
+function sendDisabled(res) {
+    setCacheHeaders(res, 'BYPASS');
+    res.setHeader('x-tomatojuice-bypass', '1');
+    return res.status(503).json({ ok: false, skipped: true, reason: 'disabled', plugin: info });
+}
+
+export async function refreshEntry(ctx, endpointKey, reason = 'refresh', initialState = null) {
     const endpoint = ENDPOINTS[endpointKey];
     const key = getCacheKey(ctx, endpointKey);
     const startedAt = Date.now();
     const generationKey = `${ctx.userKey}:${endpointKey}`;
-    const generation = generations.get(generationKey) || 0;
+    const generation = initialState?.generation ?? (generations.get(generationKey) || 0);
+    const epoch = initialState?.epoch ?? cacheEpoch;
+    const assertCurrent = () => {
+        if (cacheEpoch !== epoch || (generations.get(generationKey) || 0) !== generation || getCacheKey(ctx, endpointKey) !== key || !config.enabled || !config[endpoint.configKey]) throw new Error('Cache build invalidated; use native endpoint');
+    };
+    if (initialState && !isStateCurrent(ctx, endpointKey, initialState)) throw new Error('Cache build invalidated; use native endpoint');
     const updateProgress = (patch = {}) => setRefreshProgress(key, endpointKey, patch);
     if (inflight.has(key)) {
-        return await inflight.get(key);
+        const refreshed = await inflight.get(key);
+        assertCurrent();
+        return refreshed;
     }
 
     const controller = new AbortController();
     let timer;
     const deadline = new Promise((_, reject) => {
-        timer = setTimeout(() => { controller.abort(new Error('Shared cache build deadline exceeded')); reject(controller.signal.reason); }, 10000);
+        timer = setTimeout(() => { controller.abort(new Error('Shared cache build deadline exceeded')); reject(controller.signal.reason); }, Math.max(1, SHARED_BUILD_TIMEOUT_MS - (Date.now() - (initialState?.scanStartedAt ?? startedAt))));
     });
     const work = (async () => {
         stats.refreshes++;
         updateProgress({ phase: 'starting', reason, startedAt, bytesReceived: 0, totalBytes: null, speedBps: 0, percent: null, etaMs: null, status: null, error: null });
-        const signature = endpoint.getSignature(ctx);
+        const snapshot = initialState?.snapshot ?? (endpoint.scan ? await endpoint.scan(ctx, config, { signal: controller.signal }) : null);
+        const signature = initialState?.signature ?? snapshot?.signature ?? await endpoint.getSignature(ctx);
         let result = null;
         if (typeof endpoint.fetchForCache === 'function') {
-            result = await endpoint.fetchForCache(ctx, config, { onProgress: updateProgress, startedAt, reason, signal: controller.signal });
+            result = await endpoint.fetchForCache(ctx, config, { onProgress: updateProgress, startedAt, reason, signal: controller.signal, snapshot });
         }
         controller.signal.throwIfAborted();
         if (!result) result = await fetchOriginal(ctx, endpoint, { onProgress: updateProgress, signal: controller.signal });
@@ -74,10 +100,14 @@ export async function refreshEntry(ctx, endpointKey, reason = 'refresh') {
                 staleHitCount: 0,
                 lastError: null,
             };
-            if ((generations.get(generationKey) || 0) === generation && endpoint.getSignature(ctx) === signature) {
-                memoryCache.set(key, entry);
-                writeDiskEntry(ctx, endpointKey, entry);
+            const finalSignature = await endpoint.getSignature(ctx, config, { signal: controller.signal });
+            controller.signal.throwIfAborted();
+            assertCurrent();
+            if (finalSignature !== signature) {
+                throw new Error('Cache build invalidated; use native endpoint');
             }
+            memoryCache.set(key, entry);
+            writeDiskEntry(ctx, endpointKey, entry);
             updateProgress({ phase: 'cached', status: result.status, bytesReceived: result.bytesReceived ?? Buffer.byteLength(result.bodyText || '', 'utf8'), totalBytes: result.totalBytes ?? null, percent: result.totalBytes ? 100 : null, etaMs: 0, error: null });
             scheduleClearRefreshProgress(key);
             return { result, entry, cached: true };
@@ -100,29 +130,60 @@ export async function refreshEntry(ctx, endpointKey, reason = 'refresh') {
     void work.finally(() => { if (inflight.get(key) === promise) inflight.delete(key); }).catch(() => {});
 
     inflight.set(key, promise);
-    return await promise;
+    const refreshed = await promise;
+    assertCurrent();
+    return refreshed;
 }
 
-export function getFreshCacheState(ctx, endpointKey) {
+export async function getFreshCacheState(ctx, endpointKey, { signal } = {}) {
     const endpoint = ENDPOINTS[endpointKey];
     const signatureStartedAt = Date.now();
-    const signature = endpoint.getSignature(ctx);
+    const generation = generations.get(`${ctx.userKey}:${endpointKey}`) || 0;
+    const epoch = cacheEpoch;
+    const cacheKey = getCacheKey(ctx, endpointKey);
+    const snapshot = endpoint.scan ? await endpoint.scan(ctx, config, { signal }) : null;
+    const signature = snapshot?.signature ?? await endpoint.getSignature(ctx, config, { signal });
+    signal?.throwIfAborted();
     const signatureMs = Date.now() - signatureStartedAt;
     const entry = getCachedEntry(ctx, endpointKey);
-    if (!entry) return { entry: null, fresh: false, signature, signatureMs, reason: 'missing' };
+    if (!entry) return { entry: null, fresh: false, signature, signatureMs, snapshot, generation, epoch, cacheKey, scanStartedAt: signatureStartedAt, reason: 'missing' };
 
     const ageMs = Date.now() - Number(entry.refreshedAt || entry.createdAt || 0);
     const signatureMatches = entry.signature === signature;
     const withinMaxStale = config.maxStaleMs <= 0 || ageMs <= config.maxStaleMs;
-    return { entry, fresh: signatureMatches && withinMaxStale, signature, signatureMs, ageMs, signatureMatches, withinMaxStale, reason: signatureMatches ? (withinMaxStale ? 'fresh' : 'expired') : 'signature-changed' };
+    return { entry, snapshot, generation, epoch, cacheKey, scanStartedAt: signatureStartedAt, fresh: signatureMatches && withinMaxStale && isStateCurrent(ctx, endpointKey, { epoch, generation, cacheKey }), signature, signatureMs, ageMs, signatureMatches, withinMaxStale, reason: signatureMatches ? (withinMaxStale ? 'fresh' : 'expired') : 'signature-changed' };
+}
+
+async function readStateWithinBudget(ctx, endpointKey, budgetMs) {
+    const controller = new AbortController();
+    let timer;
+    try {
+        return await Promise.race([
+            getFreshCacheState(ctx, endpointKey, { signal: controller.signal }),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => {
+                    const error = new Error('Cache signature scan deadline exceeded; use native endpoint');
+                    controller.abort(error); reject(error);
+                }, budgetMs);
+            }),
+        ]);
+    } finally { clearTimeout(timer); }
 }
 
 export async function warmEntry(ctx, endpointKey, reason = 'warm', force = false) {
+    const endpoint = ENDPOINTS[endpointKey];
+    if (!endpoint) throw new Error('Unknown cache endpoint');
+    const disabled = disabledWarmResult(endpoint);
+    if (disabled) return disabled;
     if (!force) {
-        const state = getFreshCacheState(ctx, endpointKey);
+        const state = await readStateWithinBudget(ctx, endpointKey, SHARED_BUILD_TIMEOUT_MS);
+        const disabled = disabledWarmResult(endpoint);
+        if (disabled) return disabled;
+        if (!isStateCurrent(ctx, endpointKey, state)) throw new Error('Cache scan invalidated; retry warm');
         if (state.fresh && state.entry) {
             return { result: { ok: true, status: state.entry.status, statusText: state.entry.statusText, durationMs: 0 }, entry: state.entry, cached: true, skipped: true };
         }
+        return await refreshEntry(ctx, endpointKey, reason, state);
     }
     return await refreshEntry(ctx, endpointKey, reason);
 }
@@ -187,13 +248,15 @@ export async function handleFast(req, res, endpointKey) {
     });
 
     if (!config.enabled || !config[endpoint.configKey]) {
-        const result = await fetchOriginal(ctx, endpoint);
-        logFastDecision(endpointKey, 'bypass-original-return', { requestId: ctx.requestId, status: result.status, durationMs: Date.now() - startedAt });
-        return sendFetchResult(res, result, 'BYPASS');
+        return sendDisabled(res);
     }
 
-    const signature = endpoint.getSignature(ctx);
-    const entry = getCachedEntry(ctx, endpointKey);
+    let initialState;
+    try { initialState = await readStateWithinBudget(ctx, endpointKey, getRequestBudget(config, endpointKey).fastWaitMs); }
+    catch (error) { return res.status(502).json({ ok: false, error: error.message, plugin: info }); }
+    if (!config.enabled || !config[endpoint.configKey]) return sendDisabled(res);
+    if (!isStateCurrent(ctx, endpointKey, initialState)) return res.status(502).json({ ok: false, error: 'Cache scan invalidated; use native endpoint', plugin: info });
+    const { signature, entry } = initialState;
     const now = Date.now();
     const cacheKey = getCacheKey(ctx, endpointKey);
 
@@ -201,7 +264,7 @@ export async function handleFast(req, res, endpointKey) {
         const ageMs = now - Number(entry.refreshedAt || entry.createdAt || 0);
         const signatureMatches = entry.signature === signature;
         const withinMaxStale = config.maxStaleMs <= 0 || ageMs <= config.maxStaleMs;
-        if (signatureMatches && withinMaxStale) {
+        if (initialState.fresh) {
             stats.hits++;
             entry.hitCount = Number(entry.hitCount || 0) + 1;
             memoryCache.set(cacheKey, entry);
@@ -214,7 +277,7 @@ export async function handleFast(req, res, endpointKey) {
             memoryCache.set(cacheKey, entry);
             const state = signatureMatches ? 'STALE' : 'STALE-SIGNATURE';
             const reason = signatureMatches ? 'max-stale-expired' : 'signature-changed';
-            void refreshEntry(ctx, endpointKey, reason).catch(() => {});
+            void refreshEntry(ctx, endpointKey, reason, initialState).catch(() => {});
             logFastDecision(endpointKey, 'stale-return', { requestId: ctx.requestId, state, reason, ageMs, signatureMatches, durationMs: Date.now() - startedAt, bodyBytes: Buffer.byteLength(entry.bodyText || '', 'utf8') });
             return sendEntry(res, entry, state);
         }
@@ -258,10 +321,14 @@ export async function handleFast(req, res, endpointKey) {
         let refreshed;
         try {
             refreshed = await Promise.race([
-                refreshEntry(ctx, endpointKey, entry ? 'blocking-refresh' : 'miss'),
-                new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Fast cache build deadline exceeded; use native endpoint')), config.blockCharactersAllOnMiss ? 10000 : 1500); }),
+                refreshEntry(ctx, endpointKey, entry ? 'blocking-refresh' : 'miss', initialState),
+                new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Fast cache build deadline exceeded; use native endpoint')), Math.max(1, getRequestBudget(config, endpointKey).fastWaitMs - (Date.now() - startedAt))); }),
             ]);
         } finally { clearTimeout(deadline); }
+        // Promise consumers may invalidate/disable after the shared worker resolves but
+        // before this HTTP continuation runs. Recheck at the actual delivery boundary.
+        if (!config.enabled || !config[endpoint.configKey]) return sendDisabled(res);
+        if (!isStateCurrent(ctx, endpointKey, initialState)) throw new Error('Cache result invalidated before delivery; use native endpoint');
         const { result, entry: refreshedEntry } = refreshed;
         if (refreshedEntry) {
             logFastDecision(endpointKey, 'blocking-refresh-entry-return', { requestId: ctx.requestId, status: refreshedEntry.status, durationMs: Date.now() - startedAt, bodyBytes: Buffer.byteLength(refreshedEntry.bodyText || '', 'utf8') });
@@ -270,11 +337,6 @@ export async function handleFast(req, res, endpointKey) {
         logFastDecision(endpointKey, 'blocking-refresh-result-return', { requestId: ctx.requestId, status: result?.status, durationMs: Date.now() - startedAt, bodyBytes: Buffer.byteLength(result?.bodyText || '', 'utf8') });
         return sendFetchResult(res, result, entry ? 'REFRESH' : 'MISS');
     } catch (error) {
-        if (entry) {
-            entry.lastError = error instanceof Error ? error.message : String(error);
-            logFastDecision(endpointKey, 'stale-error-return', { requestId: ctx.requestId, error: entry.lastError, durationMs: Date.now() - startedAt });
-            return sendEntry(res, entry, 'STALE-ERROR');
-        }
         res.status(502).json({ ok: false, error: error instanceof Error ? error.message : String(error), plugin: info });
     }
 }

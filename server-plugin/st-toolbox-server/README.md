@@ -8,9 +8,11 @@
 - 能力：`GET /api/plugins/st-toolbox-server/capabilities`。
 - 模块：`/api/plugins/st-toolbox-server/modules/tomatojuice/*`。
 - 本地配置：可选 `tomatojuice.config.json`（本目录），启动时读取，不提供网络修改接口。可参考 `modules/tomatojuice/config.js`；强制禁止占位空列表、自动核心修补和自动 HTML 安装。
-- 缓存：`DATA_ROOT/_st-toolbox/tomatojuice-cache-v1`，不是此插件目录；不会因卸载时清空内存而删除磁盘。
-- 安全默认：不注册 SW，不代理核心模块，不桥接保存请求。可选异步桥接仅加速角色列表/version，含响应体最多等待 2 秒，失败走原生读取；后端删除不会使新版 HTML 的原生核心模块 URL 失效。旧 HTML / 尚未更新的旧 SW 需先完成一次性迁移。
-- 冷缓存：默认等待 1.5 秒，超时返回快速接口错误而不是空角色列表；显式 `blockCharactersAllOnMiss: true` 最多等待 10 秒。共享构建总期限 10 秒，并传播取消信号；原生读取耗时不受该期限限制。
+- 缓存：`DATA_ROOT/_st-toolbox/tomatojuice-cache-v2`，不是此插件目录；schema 2 不读取 v1 旧缓存，不删除用户数据。PNG 解析与聊天统计按用户分离并增量复用，扫描始终校验文件元数据；异步 I/O 并发有上限。
+- 安全默认：不注册 SW，不代理核心模块，不桥接保存请求。可选异步桥接仅加速启用的角色列表/version，默认含响应体最多等待 2 秒，失败走原生读取；后端删除不会使新版 HTML 的原生核心模块 URL 失效。旧 HTML / 尚未更新的旧 SW 需先完成一次性迁移。
+- 冷缓存：默认 fast 等待预算 1.5 秒，超时返回错误而不是空角色列表或失效旧列表；显式 `blockCharactersAllOnMiss: true` 采用 10 秒 fast / 11 秒浏览器预算。共享构建独立期限 10 秒，并传播取消信号；原生读取不受桥接 fast 期限限制。
+- 真正关闭：`cacheCharactersAll: false` 令新版桥接直接透传原生角色接口，并跳过该端点预热；`cacheVersion` 独立控制。旧页面访问关闭的 fast 端点返回 503 + `x-tomatojuice-bypass: 1`，后端不会再转发原生请求。修改配置后手动重启酒馆并刷新各标签页。
+- 策略同步：`/probe`、`/status` 返回公开 `readPolicy`（仅端点开关和等待预算）。新版前端会同步现有桥接策略；缺少此字段的旧后端不再主动加载晚到桥接或预热。
 - 诊断：不再挂载全局浏览器日志采集；保留有界、按用户隔离的日志 API，不捕获服务端全局 console。
 - 安装 early bridge：在 Tomatojuice 管理区点击“检查首屏状态 → 安装／修复首屏接入”，管理员确认后备份并修改全站 `public/index.html`，刷新页面生效；撤销同理。管理区在前端优化关闭时仍可访问。必须启用宿主 CSRF 保护且具有有效会话；缺权限/旧后端/路径异常会明确提示。后端更新部署后需重启酒馆。
 - 固定管理接口：POST `modules/tomatojuice/early/manage/status`、`early/install`、`early/uninstall`、`early/cleanup-legacy`；写入仅管理员+有效会话 CSRF+JSON `{ "confirm": true }`，不接受路径/HTML。能力为 `early-management`；不提供通用文件编辑。

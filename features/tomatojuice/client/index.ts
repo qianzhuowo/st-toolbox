@@ -2,6 +2,7 @@ import { discoverBackend } from '../../../core/backend-client.js';
 import { API_PREFIX } from './constants';
 import { ensureLocalSettings } from './settings';
 import { state } from './state';
+import { applyReadPolicy, cacheEnabled } from './cache-policy';
 import { fullProbe, warm } from './api';
 import { installFetchObserver } from './fetch-observer';
 import { scheduleCharactersRefresh } from './characters-refresh';
@@ -22,7 +23,7 @@ export async function startBackendClient() {
   if (!capabilities?.modules?.some((module: any) => module.id === 'tomatojuice')) return;
   await fullProbe();
   if (!state.backend?.ok) return;
-  if (!(globalThis as any).__tomatojuiceEarlyBridge) {
+  if (!(globalThis as any).__tomatojuiceEarlyBridge && state.backend.readPolicy?.enabled && (cacheEnabled('characters-all') || cacheEnabled('version'))) {
     // Optional late read acceleration. Never gate native startup or require the script to load.
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, 2500);
@@ -32,5 +33,6 @@ export async function startBackendClient() {
       document.head.append(script);
     });
   }
+  applyReadPolicy();
   if (state.localSettings.autoWarm) await warm(false).catch(error => console.warn('[tomatojuice] 预热失败', error));
 }

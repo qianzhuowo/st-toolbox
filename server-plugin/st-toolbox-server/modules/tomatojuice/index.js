@@ -1,4 +1,6 @@
 import { config } from './config.js';
+import { clearCharacterCaches } from './character-scanner.js';
+import { makeReadPolicy } from './read-policy.js';
 import { VERSION } from './constants.js';
 import { ENDPOINT_LIST, parseEndpointList } from './endpoint-registry.js';
 import { handleFast, warmEntry } from './fast-handler.js';
@@ -40,7 +42,7 @@ export const tomatojuice = {
             catch (error) { console.error('[st-toolbox-server:tomatojuice]', error.message); if (!res.headersSent) res.status(error.status || 500).json({ ok: false, error: error.message }); }
         });
         registerEarlyManagement(route, createEarlyBridgeManager());
-        const status = req => ({ ok: true, version: VERSION, status: getUserStatus(makeRequestContext(req, { bodyOverride: {} })), stats: aggregateMetrics(stats), earlyBridge: publicBridgeStatus(), settingsSave: aggregateMetrics(getSettingsSaveStatus()), chatSave: aggregateMetrics(getChatSaveStatus()), settingsGet: aggregateMetrics(getSettingsGetStatus()), browserLogs: { total: getUserLogs(req).total }, serviceWorker: { enabled: config.serviceWorkerEnabled } });
+        const status = req => ({ ok: true, version: VERSION, readPolicy: makeReadPolicy(), status: getUserStatus(makeRequestContext(req, { bodyOverride: {} })), stats: aggregateMetrics(stats), earlyBridge: publicBridgeStatus(), settingsSave: aggregateMetrics(getSettingsSaveStatus()), chatSave: aggregateMetrics(getChatSaveStatus()), settingsGet: aggregateMetrics(getSettingsGetStatus()), browserLogs: { total: getUserLogs(req).total }, serviceWorker: { enabled: config.serviceWorkerEnabled } });
         route('post', '/probe', (req, res) => res.json(status(req)));
         route('post', '/status', (req, res) => res.json(status(req)));
         route('post', '/early/status', (_req, res) => res.json({ ok: true, status: publicBridgeStatus() }));
@@ -58,12 +60,14 @@ export const tomatojuice = {
         route('post', '/warm', async (req, res) => {
             const keys = parseEndpointList(req.body?.endpoints);
             const tasks = keys.map(key => warmEntry(makeRequestContext(req, { bodyOverride: {} }), key, 'warm', req.body?.force === true));
-            if (req.body?.wait) { const results = await Promise.all(tasks); res.json({ ok: true, results: results.map(r => ({ ok: r.result?.ok, cached: r.cached, skipped: r.skipped })) }); }
+            if (req.body?.wait) { const results = await Promise.all(tasks); res.json({ ok: true, results: results.map(r => ({ ok: r.result?.ok ?? !!r.skipped, cached: r.cached, skipped: !!r.skipped, reason: r.reason })) }); }
             else { void Promise.all(tasks).catch(e => console.warn('[tomatojuice] warm failed:', e.message)); res.json({ ok: true, waited: false }); }
         });
         for (const name of ['/invalidate', '/cache/clear']) route('post', name, (req, res) => {
             const keys = parseEndpointList(req.body?.endpoints);
-            const removed = invalidateForUser(makeRequestContext(req, { bodyOverride: {} }), keys);
+            const ctx = makeRequestContext(req, { bodyOverride: {} });
+            const removed = invalidateForUser(ctx, keys);
+            if (name === '/cache/clear' && keys.includes('characters-all')) clearCharacterCaches(ctx);
             clearSettingsGetCache();
             res.json({ ok: true, removed });
         });

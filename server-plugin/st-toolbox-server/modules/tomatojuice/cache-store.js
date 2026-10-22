@@ -6,10 +6,12 @@ import { config } from './config.js';
 import { ENDPOINTS } from './endpoint-registry.js';
 import { sha256 } from './utils.js';
 import { stats } from './stats.js';
+import { clearCharacterCaches } from './character-scanner.js';
 
 /** @type {Map<string, any>} */
 export const memoryCache = new Map();
 export const generations = new Map();
+export let cacheEpoch = 0;
 /** @type {Map<string, Promise<any>>} */
 export const inflight = new Map();
 /** @type {Map<string, any>} */
@@ -18,17 +20,17 @@ export const refreshProgress = new Map();
 const PROGRESS_RETENTION_MS = 30 * 1000;
 
 export function getDiskRoot() {
-    // Keep cache inside this server plugin folder so users can clearly see
-    // the files belong to tomatojuice and can remove them with the plugin.
-    return path.resolve(globalThis.DATA_ROOT || process.cwd(), '_st-toolbox', 'tomatojuice-cache-v1');
+    // Derived cache belongs under DATA_ROOT, separate from plugin code and native user data.
+    // Schema-specific roots keep older persisted semantics from being reused accidentally.
+    return path.resolve(globalThis.DATA_ROOT || process.cwd(), '_st-toolbox', 'tomatojuice-cache-v2');
 }
 
 export function getCacheKey(ctx, endpointKey) {
-    return `${ctx.userKey}:${endpointKey}:${sha256(ctx.bodyText + ':schema1:shallow=' + config.shallowCharactersAll).slice(0, 32)}`;
+    return `${ctx.userKey}:${endpointKey}:${sha256(ctx.bodyText + ':schema2:shallow=' + config.shallowCharactersAll).slice(0, 32)}`;
 }
 
 export function getDiskCachePath(ctx, endpointKey) {
-    const bodyHash = sha256(ctx.bodyText + ':schema1:shallow=' + config.shallowCharactersAll).slice(0, 32);
+    const bodyHash = sha256(ctx.bodyText + ':schema2:shallow=' + config.shallowCharactersAll).slice(0, 32);
     return path.join(getDiskRoot(), ctx.userKey, `${endpointKey}-${bodyHash}.json`);
 }
 
@@ -44,7 +46,7 @@ export function readDiskEntry(ctx, endpointKey) {
         const file = getDiskCachePath(ctx, endpointKey);
         if (!fs.existsSync(file)) return null;
         const entry = JSON.parse(fs.readFileSync(file, 'utf8'));
-        if (!entry || entry.schema !== 1 || entry.endpointKey !== endpointKey || typeof entry.bodyText !== 'string') return null;
+        if (!entry || entry.schema !== 2 || entry.endpointKey !== endpointKey || typeof entry.bodyText !== 'string') return null;
         if (endpointKey === 'characters-all' && !Array.isArray(JSON.parse(entry.bodyText))) return null;
         return entry;
     } catch {
@@ -58,7 +60,7 @@ export function writeDiskEntry(ctx, endpointKey, entry) {
         const file = getDiskCachePath(ctx, endpointKey);
         fs.mkdirSync(path.dirname(file), { recursive: true });
         const temporary = file + '.' + process.pid + '.tmp';
-        fs.writeFileSync(temporary, JSON.stringify({ ...entry, schema: 1 }), { encoding: 'utf8', mode: 0o600 });
+        fs.writeFileSync(temporary, JSON.stringify({ ...entry, schema: 2 }), { encoding: 'utf8', mode: 0o600 });
         fs.renameSync(temporary, file);
     } catch (error) {
         console.warn('[tomatojuice] Persistent cache write failed; using memory only:', error.message);
@@ -223,7 +225,9 @@ export function invalidateForUser(ctx, endpointKeys) {
 }
 
 export function clearCacheStores() {
+    cacheEpoch++;
+    clearCharacterCaches();
     memoryCache.clear();
-    inflight.clear();
+    // Keep pending work deduplicated; the epoch prevents it from returning or committing.
     refreshProgress.clear();
 }

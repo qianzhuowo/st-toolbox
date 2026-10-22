@@ -1,5 +1,10 @@
 export type CacheEndpoint = 'characters-all' | 'version';
 
+export type ReadPolicy = {
+  enabled: boolean;
+  endpoints: Record<CacheEndpoint, { enabled: boolean; timeoutMs: number }>;
+};
+
 export type EarlyBridgeStatus = {
   ok: boolean;
   enabled: boolean;
@@ -176,6 +181,7 @@ export type BackendProbe = {
     pluginDir?: string;
   };
   stats?: Record<string, unknown>;
+  readPolicy?: ReadPolicy;
   status?: CacheEntrySummary[];
   settingsGet?: SettingsGetStatus;
   settingsSave?: SettingsSaveStatus;

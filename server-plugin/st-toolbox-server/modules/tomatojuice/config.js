@@ -20,42 +20,40 @@ export const DEFAULT_CONFIG = Object.freeze({
     // No synthetic empty list: it can clear active_character / auto-loaded chats.
     asyncCharactersAllOnMiss: false,
     allowEmptyCharactersAllOnMiss: false,
-    // Optional longer first-build budget (10s instead of 1.5s); never unbounded.
+    // Optional longer fast budget (10s); the generated browser bridge allows 11s for transport/JSON.
     blockCharactersAllOnMiss: false,
-    // Install a tiny bridge script into public/index.html. It runs before script.js and can patch fetch on first page load.
+    // Optional async HTML bridge. It may arrive after the native startup requests.
     earlyBridgeEnabled: true,
     autoInstallEarlyBridge: false,
     earlyBridgePatchFetch: true,
-    // Intercept /api/settings/save before the large body leaves the browser.
-    // The bridge/SW sends either a no-op hash or a deep JSON patch to /fast/settings-save.
+    // Legacy fast save APIs only. Current bridge/SW NEVER intercept settings/chat saves.
     optimizeSettingsSave: true,
     settingsSaveNoopEnabled: true,
     settingsSavePatchEnabled: true,
     settingsSaveMaxPatchOperations: 2000,
     // If the patch request is too close to the full payload size, the browser falls back to the original full save.
     settingsSaveMaxPatchBytesRatio: 0.85,
-    // Intercept /api/chats/save and /api/chats/group/save before the whole chat file leaves the browser.
-    // The bridge sends either a no-op hash or a chat-array patch to /fast/chats-save.
+    // Retained chat-patch API configuration for explicit compatibility callers.
     optimizeChatSave: true,
     chatSaveNoopEnabled: true,
     chatSavePatchEnabled: true,
     chatSaveMaxPatchOperations: 5000,
     chatSaveMaxPatchBytesRatio: 0.85,
     chatSaveCacheMaxEntries: 64,
-    // Replace /api/settings/get with a cached fast endpoint that preserves the original response shape and reads directories in parallel.
+    // Retained settings-get fast API; not automatically routed by the current bridge.
     optimizeSettingsGet: true,
     cacheSettingsGet: true,
-    // Preload /scripts/templates/*.html in parallel and serve renderTemplateAsync XHR calls from the preloaded memory records.
+    // Legacy compatibility values. The current read bridge does not preload templates or version.
     templatePreloadEnabled: true,
-    // Prefetch /version early so script.js can reuse the fast response. Static resource preloads are intentionally not handled here.
+    // Legacy startup-prefetch switch (inactive in the read-only bridge).
     startupPreloadEnabled: true,
-    // Service Worker fallback for fast startup routes stays on so old pages still avoid blocking if Early Bridge misses.
+    // Compatibility SW has no fetch listener; these legacy flags do not enable interception.
     serviceWorkerFastRouteFallback: false,
     serviceWorkerSettingsGetFallback: false,
     serviceWorkerSettingsSaveFallback: false,
     serviceWorkerChatSaveFallback: false,
     serviceWorkerTemplateFallback: false,
-    // Module proxy rewrites selected SillyTavern ES modules at response time. This does not edit SillyTavern source files.
+    // Retired proxy configuration, retained for migration only; normalize always disables it.
     moduleProxyEnabled: false,
     patchStartupInit: true,
     patchI18nInit: true,
@@ -64,10 +62,9 @@ export const DEFAULT_CONFIG = Object.freeze({
     patchParallelActivateExtensions: true,
     // Fast-start mode: extension scripts/styles activate after APP_READY. Event replay keeps common extension hooks compatible.
     deferExtensionActivationUntilAppReady: false,
-    // Capture browser console/error/rejection logs through Early Bridge and expose them from the backend plugin panel/API.
+    // Legacy logging switch; the read-only bridge installs no console/error collector.
     browserLogCaptureEnabled: false,
-    // Optional ST source hotfix. When enabled, plugin patches src/endpoints/chats.js on startup;
-    // a restart is still required for the patched source to be loaded by SillyTavern.
+    // Retired automatic core patch; normalize always disables it.
     autoPatchChatsEnoentGuard: false,
     // Internal self-fetches target loopback (127.0.0.1/localhost). When ST uses a self-signed HTTPS
     // certificate, skip TLS verification only for these loopback requests so fast paths keep working.

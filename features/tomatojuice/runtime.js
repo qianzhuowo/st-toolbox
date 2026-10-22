@@ -157,6 +157,27 @@ var init_settings = __esm({
   }
 });
 
+// features/tomatojuice/client/cache-policy.ts
+function cacheEnabled(endpoint) {
+  return state.backend?.ok === true && state.backend.readPolicy?.endpoints?.[endpoint]?.enabled === true;
+}
+function applyReadPolicy() {
+  const disabled = {
+    enabled: false,
+    endpoints: {
+      "characters-all": { enabled: false, timeoutMs: 2e3 },
+      version: { enabled: false, timeoutMs: 2e3 }
+    }
+  };
+  const bridge = globalThis.__tomatojuiceEarlyBridge;
+  bridge?.updatePolicy?.(state.backend?.ok ? state.backend.readPolicy || disabled : disabled);
+}
+var init_cache_policy = __esm({
+  "features/tomatojuice/client/cache-policy.ts"() {
+    init_state();
+  }
+});
+
 // features/tomatojuice/client/service-worker.ts
 function getServiceWorkerScriptURL(reg) {
   return reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || "";
@@ -230,9 +251,9 @@ __export(api_exports, {
   refreshStatus: () => refreshStatus,
   warm: () => warm
 });
-async function postJson(url, body = {}) {
+async function postJson(url, body = {}, options = {}) {
   if (!url.startsWith(API_PREFIX + "/")) throw new Error("Invalid tomatojuice backend route");
-  return backendRequest("tomatojuice", url.slice(API_PREFIX.length), body);
+  return backendRequest("tomatojuice", url.slice(API_PREFIX.length), body, options);
 }
 async function probeBackend() {
   try {
@@ -241,9 +262,12 @@ async function probeBackend() {
     state.backend = null;
     console.info("[tomatojuice] \u53EF\u9009\u540E\u7AEF\u4E0D\u53EF\u7528\uFF0C\u4FDD\u7559\u539F\u751F\u8BF7\u6C42", String(error));
   }
+  applyReadPolicy();
 }
 async function warm(wait = false) {
-  const result = await postJson(`${API_PREFIX}/warm`, { endpoints: ["characters-all", "version"], wait });
+  const endpoints = ["characters-all", "version"].filter(cacheEnabled);
+  if (!endpoints.length) return { ok: true, skipped: true, reason: "cache-disabled-or-unavailable" };
+  const result = await postJson(`${API_PREFIX}/warm`, { endpoints, wait });
   await refreshStatus();
   return result;
 }
@@ -255,6 +279,7 @@ async function clearCache() {
 async function refreshStatus() {
   await refreshServiceWorkerState();
   if (state.backend) state.backend = { ...state.backend, ...await postJson(`${API_PREFIX}/status`) };
+  applyReadPolicy();
 }
 async function fullProbe() {
   await Promise.allSettled([probeBackend(), refreshServiceWorkerState()]);
@@ -275,6 +300,7 @@ var init_api = __esm({
     init_constants();
     init_service_worker();
     init_state();
+    init_cache_policy();
   }
 });
 
@@ -283,6 +309,7 @@ init_backend_client();
 init_constants();
 init_settings();
 init_state();
+init_cache_policy();
 init_api();
 
 // features/tomatojuice/client/fetch-observer.ts
@@ -291,7 +318,7 @@ init_constants();
 // features/tomatojuice/client/characters-refresh.ts
 init_constants();
 init_st_context();
-init_state();
+init_cache_policy();
 var pending;
 var refreshing = false;
 var repeat = false;
@@ -308,12 +335,19 @@ async function refresh(source) {
   }
   refreshing = true;
   try {
-    if (state.backend?.ok) {
-      const { postJson: postJson2 } = await Promise.resolve().then(() => (init_api(), api_exports));
-      await postJson2(`${API_PREFIX}/invalidate`, { endpoints: ["characters-all"], reason: source });
-      await postJson2(`${API_PREFIX}/warm`, { endpoints: ["characters-all"], wait: true });
+    if (cacheEnabled("characters-all")) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 2e3);
+      try {
+        const { postJson: postJson2 } = await Promise.resolve().then(() => (init_api(), api_exports));
+        await postJson2(`${API_PREFIX}/invalidate`, { endpoints: ["characters-all"], reason: source }, { signal: controller.signal });
+        await postJson2(`${API_PREFIX}/warm`, { endpoints: ["characters-all"], wait: false }, { signal: controller.signal });
+      } catch (error) {
+        console.warn("[tomatojuice] \u53EF\u9009\u89D2\u8272\u7F13\u5B58\u51C6\u5907\u5931\u8D25\uFF0C\u7EE7\u7EED\u539F\u751F\u5237\u65B0", error);
+      } finally {
+        clearTimeout(timer);
+      }
     }
-    const ctx = getCtx();
     const mod = await import(
       /* @vite-ignore */
       "/script.js"
@@ -608,7 +642,7 @@ async function startBackendClient() {
   if (!capabilities?.modules?.some((module) => module.id === "tomatojuice")) return;
   await fullProbe();
   if (!state.backend?.ok) return;
-  if (!globalThis.__tomatojuiceEarlyBridge) {
+  if (!globalThis.__tomatojuiceEarlyBridge && state.backend.readPolicy?.enabled && (cacheEnabled("characters-all") || cacheEnabled("version"))) {
     await new Promise((resolve) => {
       const timer = setTimeout(resolve, 2500);
       const done = () => {
@@ -626,6 +660,7 @@ async function startBackendClient() {
       document.head.append(script);
     });
   }
+  applyReadPolicy();
   if (state.localSettings.autoWarm) await warm(false).catch((error) => console.warn("[tomatojuice] \u9884\u70ED\u5931\u8D25", error));
 }
 export {

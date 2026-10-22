@@ -1,6 +1,7 @@
 # Dependencies and package-manager caches
 node_modules/
 .pnpm-store/
+.pnpm-debug.log*
 .npm/
 .yarn/cache/
 .yarn/unplugged/
@@ -23,22 +24,50 @@ out/
 *.js.map
 *.mjs.map
 *.css.map
+*.cjs.map
 /*.tgz
 
 # Local-only tests, benchmarks, fixtures and helpers; keep them on disk, not in Git.
-/test/
-/tests/
-/__tests__/
-/benchmarks/
+test/
+tests/
+__tests__/
+benchmarks/
+__fixtures__/
+__snapshots__/
+.fixtures/
+*.test.js
+*.test.mjs
+*.test.cjs
+*.test.ts
+*.spec.js
+*.spec.mjs
+*.spec.cjs
+*.spec.ts
+*.bench.js
+*.bench.mjs
+*.bench.cjs
+*.bench.ts
+
+# Local cross-repository verification; not needed to build or run the extension.
+/scripts/verify-tomatojuice-tt.mjs
+/docs/tomatojuice-cache-validation.md
+/docs/tomatojuice-tt-verification.md
 
 # Test results, coverage and browser automation artifacts
 coverage/
 .nyc_output/
+.vitest/
+.browser-test-cache/
+.playwright/
+/playwright/.auth/
+/ms-playwright/
 test-results/
 test-results.*
 test-output/
 test-artifacts/
 benchmark-results/
+benchmark-results.*
+/test-results-*/
 playwright-report/
 playwright/.cache/
 blob-report/
@@ -77,6 +106,8 @@ Desktop.ini
 /_st-toolbox/
 /data/
 /server-plugin/st-toolbox-server/tomatojuice.config.json
+/server-plugin/st-toolbox-server/_st-toolbox/
+/server-plugin/st-toolbox-server/data/
 
 # Keep build sources/scripts, package.json and package-lock.json for reproducible builds.
 # Keep features/tomatojuice/runtime.js: SillyTavern loads it without a user-side build.

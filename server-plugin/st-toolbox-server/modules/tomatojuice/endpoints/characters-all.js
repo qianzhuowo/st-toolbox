@@ -1,10 +1,10 @@
-import { scanChatMetadata } from '../utils.js';
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { HEADER_PREFIX } from '../constants.js';
-import { getPathValue, scanDirectoryShallow, signatureFromRecords } from '../utils.js';
+import { getPathValue } from '../utils.js';
+import { scanCharacters, getParsedCard, mapBounded, SCAN_CONCURRENCY } from '../character-scanner.js';
 
 const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
 // A single pathological card should not be allowed to recreate the original giant-string failure.
@@ -15,29 +15,6 @@ const MAX_CARD_TEXT_CHUNK_BYTES = 64 * 1024 * 1024;
 // cards cannot OOM low-memory devices (Android/Termux), which previously left the cache empty.
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const PNG_CHUNK_HEADER_BYTES = 8;
-// Bounded fan-out keeps scanning fast without opening every card at once (file-descriptor / RAM safety).
-const DEFAULT_SCAN_CONCURRENCY = 6;
-
-function resolveScanConcurrency(config) {
-    const raw = Number(config?.charactersAllScanConcurrency);
-    if (!Number.isFinite(raw)) return DEFAULT_SCAN_CONCURRENCY;
-    return Math.max(1, Math.min(32, Math.trunc(raw)));
-}
-
-async function mapWithConcurrency(items, limit, iterator, signal) {
-    const size = Math.max(1, Math.min(limit, items.length));
-    let cursor = 0;
-    const workers = new Array(size).fill(null).map(async () => {
-        while (true) {
-            signal?.throwIfAborted();
-            const index = cursor++;
-            if (index >= items.length) break;
-            await iterator(items[index], index);
-        }
-    });
-    await Promise.all(workers);
-}
-
 function callProgress(onProgress, patch) {
     try {
         if (typeof onProgress === 'function') onProgress(patch);
@@ -96,29 +73,6 @@ function normalizeBoolean(value) {
 
 function normalizeArray(value) {
     return Array.isArray(value) ? value : [];
-}
-
-async function calculateChatSize(chatsRoot, avatarFileName) {
-    let chatSize = 0;
-    let dateLastChat = 0;
-    try {
-        const charDir = path.join(chatsRoot, String(avatarFileName || '').replace(/\.png$/i, ''));
-        const entries = await fs.promises.readdir(charDir, { withFileTypes: true }).catch(() => null);
-        if (!entries) return { chatSize, dateLastChat };
-        await Promise.all(entries.map(async (entry) => {
-            if (!entry.isFile()) return;
-            try {
-                const stat = await fs.promises.stat(path.join(charDir, entry.name));
-                chatSize += stat.size;
-                dateLastChat = Math.max(dateLastChat, stat.mtimeMs);
-            } catch {
-                // ignore individual chat stat errors
-            }
-        }));
-    } catch {
-        // ignore chat directory errors
-    }
-    return { chatSize, dateLastChat };
 }
 
 function calculateDataSize(data) {
@@ -186,7 +140,7 @@ async function readCharacterCardJson(filePath, signal) {
     }
 }
 
-async function makeShallowCharacterFromCard(raw, avatarFileName, stat, directories) {
+function makeShallowCharacterFromCard(raw, avatarFileName, stat) {
     const data = raw && typeof raw.data === 'object' && raw.data !== null ? raw.data : {};
     const extensions = data.extensions && typeof data.extensions === 'object' ? data.extensions : {};
     const name = String(data.name || raw?.name || path.basename(avatarFileName, path.extname(avatarFileName)) || '').trim();
@@ -194,7 +148,7 @@ async function makeShallowCharacterFromCard(raw, avatarFileName, stat, directori
 
     const tags = normalizeArray(data.tags).length ? normalizeArray(data.tags) : normalizeArray(raw?.tags);
     const fav = normalizeBoolean(raw?.fav ?? extensions.fav);
-    const { chatSize, dateLastChat } = await calculateChatSize(directories.chats, avatarFileName);
+
     const createDate = raw?.create_date || data.create_date || new Date(Math.round(stat?.ctimeMs || Date.now())).toISOString();
 
     return toShallowCharacter({
@@ -204,8 +158,8 @@ async function makeShallowCharacterFromCard(raw, avatarFileName, stat, directori
         fav,
         date_added: stat?.ctimeMs || 0,
         create_date: createDate,
-        date_last_chat: dateLastChat,
-        chat_size: chatSize,
+        date_last_chat: 0,
+        chat_size: 0,
         data_size: calculateDataSize(data),
         tags,
         data: {
@@ -221,15 +175,13 @@ async function makeShallowCharacterFromCard(raw, avatarFileName, stat, directori
     });
 }
 
-async function processCharacterFileDirect(fileName, directories, signal) {
-    const filePath = path.join(directories.characters, fileName);
-    signal?.throwIfAborted();
-    const stat = await fs.promises.stat(filePath);
-    signal?.throwIfAborted();
-    const jsonText = await readCharacterCardJson(filePath, signal);
-    signal?.throwIfAborted();
-    const raw = JSON.parse(jsonText);
-    return { character: await makeShallowCharacterFromCard(raw, fileName, stat, directories), stat };
+async function processCharacterFileDirect(ctx, card, signal) {
+    const character = await getParsedCard(ctx, card, async () => {
+        const jsonText = await readCharacterCardJson(path.join(ctx.directories.characters, card.name), signal);
+        signal?.throwIfAborted();
+        return makeShallowCharacterFromCard(JSON.parse(jsonText), card.name, card.stat);
+    }, signal);
+    return { character, stat: card.stat };
 }
 
 async function fetchCharactersAllDirect(ctx, config, options = {}) {
@@ -245,13 +197,9 @@ async function fetchCharactersAllDirect(ctx, config, options = {}) {
 
     callProgress(onProgress, progressPatch('scanning', startedAt, 0, null, { status: null, error: null }));
 
-    const dirents = await fs.promises.readdir(charactersDir, { withFileTypes: true });
-    const pngFiles = dirents
-        .filter(entry => entry.isFile() && path.extname(entry.name).toLowerCase() === '.png')
-        .map(entry => entry.name)
-        .sort((a, b) => a.localeCompare(b));
-
-    const concurrency = resolveScanConcurrency(config);
+    const snapshot = options.snapshot || await scanCharacters(ctx, config, { signal });
+    const pngFiles = snapshot.cards;
+    const concurrency = SCAN_CONCURRENCY;
     const characters = [];
     let processed = 0;
     let processedBytes = 0;
@@ -260,14 +208,17 @@ async function fetchCharactersAllDirect(ctx, config, options = {}) {
 
     callProgress(onProgress, progressPatch('reading', startedAt, 0, null, { count: 0, totalCount: pngFiles.length, errors: 0 }));
 
-    await mapWithConcurrency(pngFiles, concurrency, async (fileName) => {
+    await mapBounded(pngFiles, async (card) => {
         try {
-            const { character, stat } = await processCharacterFileDirect(fileName, directories, signal);
-            if (character?.name) characters.push(character);
+            const { character, stat } = await processCharacterFileDirect(ctx, card, signal);
+            if (character?.name) {
+                const totals = snapshot.chats.get(card.name);
+                characters.push({ ...character, chat_size: totals.chatSize, date_last_chat: totals.dateLastChat });
+            }
             processedBytes += stat?.size || 0;
         } catch (error) {
             errors++;
-            console.warn(`[tomatojuice] Could not build shallow character cache entry for ${fileName}:`, error instanceof Error ? error.message : error);
+            console.warn(`[tomatojuice] Could not build shallow character cache entry for ${card.name}:`, error instanceof Error ? error.message : error);
         } finally {
             processed++;
             const now = Date.now();
@@ -318,12 +269,8 @@ async function fetchCharactersAllDirect(ctx, config, options = {}) {
     };
 }
 
-function getCharactersSignature(ctx) {
-    return signatureFromRecords([
-        { label: 'schema', value: 'tomatojuice-characters-v1' },
-        ...scanDirectoryShallow(ctx.directories?.characters, { label: 'characters', extensions: ['.png'] }),
-        ...scanChatMetadata(ctx.directories?.chats),
-    ]);
+async function getCharactersSignature(ctx, config, options) {
+    return (await scanCharacters(ctx, config, options)).signature;
 }
 
 function transformBodyForCache(ctx, bodyText, config) {
@@ -376,6 +323,7 @@ export const charactersAllEndpoint = {
     configKey: 'cacheCharactersAll',
     diskCacheConfigKey: 'diskCacheCharactersAll',
     method: 'POST',
+    scan: scanCharacters,
     getSignature: getCharactersSignature,
     fetchForCache: fetchCharactersAllDirect,
     staleOnSignatureChange: false,
