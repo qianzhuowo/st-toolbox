@@ -194,7 +194,6 @@ export type BackendProbe = {
 export type LocalSettings = {
   autoRegisterServiceWorker: boolean;
   autoWarm: boolean;
-  autoRefreshCharactersAfterAsyncMiss: boolean;
   autoCheckUpdates: boolean;
   skippedUpdateVersion: string;
 };

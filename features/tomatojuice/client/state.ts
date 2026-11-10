@@ -3,7 +3,6 @@ import type { BackendProbe, BrowserLogList, LocalSettings, ServiceWorkerState, U
 export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   autoRegisterServiceWorker: false,
   autoWarm: true,
-  autoRefreshCharactersAfterAsyncMiss: true,
   autoCheckUpdates: false,
   skippedUpdateVersion: '',
 };

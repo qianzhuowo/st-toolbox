@@ -9,4 +9,3 @@ export const DRAWER_ID = 'tomatojuice-drawer';
 export const UI_PREFIX = 'cp';
 
 export const EXTENSION_LOADED_FLAG = '__tomatojuiceLoaded';
-export const FETCH_OBSERVER_FLAG = '__tomatojuiceFetchObserverInstalled';

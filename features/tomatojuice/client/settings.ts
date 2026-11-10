@@ -18,7 +18,7 @@ export function ensureLocalSettings(): LocalSettings {
   }
   s.autoRegisterServiceWorker = Boolean(s.autoRegisterServiceWorker);
   s.autoWarm = Boolean(s.autoWarm);
-  s.autoRefreshCharactersAfterAsyncMiss = Boolean(s.autoRefreshCharactersAfterAsyncMiss);
+  delete s.autoRefreshCharactersAfterAsyncMiss; // Removed setting; drop the stale persisted key.
   s.autoCheckUpdates = Boolean(s.autoCheckUpdates);
   s.skippedUpdateVersion = String(s.skippedUpdateVersion ?? '').trim();
   state.localSettings = s;

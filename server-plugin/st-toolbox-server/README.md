@@ -1,24 +1,16 @@
-# st-toolbox-server
+# st-toolbox-server（宿主）
 
-通用 SillyTavern 后端，当前包含 `tomatojuice` 性能模块。Node >=18，无第三方运行依赖。
+st-toolbox 的通用 SillyTavern 后端宿主。Node >=18，无第三方依赖。
 
-把此**整个目录**手动复制到 `SillyTavern/plugins/st-toolbox-server`，在酒馆配置中启用 `enableServerPlugins: true`，由用户手动重启。不要将它安装到前端 `third-party` 扫描路径。
+**只需首次安装**：把此目录复制到 `SillyTavern/plugins/st-toolbox-server`，在酒馆 `config.yaml` 启用 `enableServerPlugins: true`，手动重启。
 
-- 入口：`index.mjs`，导出 `info / init(router) / exit()`。
-- 能力：`GET /api/plugins/st-toolbox-server/capabilities`。
-- 模块：`/api/plugins/st-toolbox-server/modules/tomatojuice/*`。
-- 本地配置：可选 `tomatojuice.config.json`（本目录），启动时读取，不提供网络修改接口。可参考 `modules/tomatojuice/config.js`；强制禁止占位空列表、自动核心修补和自动 HTML 安装。
-- 缓存：`DATA_ROOT/_st-toolbox/tomatojuice-cache-v2`，不是此插件目录；schema 2 不读取 v1 旧缓存，不删除用户数据。PNG 解析与聊天统计按用户分离并增量复用，扫描始终校验文件元数据；异步 I/O 并发有上限。
-- 安全默认：不注册 SW，不代理核心模块，不桥接保存请求。可选异步桥接仅加速启用的角色列表/version，默认含响应体最多等待 2 秒，失败走原生读取；后端删除不会使新版 HTML 的原生核心模块 URL 失效。旧 HTML / 尚未更新的旧 SW 需先完成一次性迁移。
-- 冷缓存：默认 fast 等待预算 1.5 秒，超时返回错误而不是空角色列表或失效旧列表；显式 `blockCharactersAllOnMiss: true` 采用 10 秒 fast / 11 秒浏览器预算。共享构建独立期限 10 秒，并传播取消信号；原生读取不受桥接 fast 期限限制。
-- 真正关闭：`cacheCharactersAll: false` 令新版桥接直接透传原生角色接口，并跳过该端点预热；`cacheVersion` 独立控制。旧页面访问关闭的 fast 端点返回 503 + `x-tomatojuice-bypass: 1`，后端不会再转发原生请求。修改配置后手动重启酒馆并刷新各标签页。
-- 策略同步：`/probe`、`/status` 返回公开 `readPolicy`（仅端点开关和等待预算）。新版前端会同步现有桥接策略；缺少此字段的旧后端不再主动加载晚到桥接或预热。
-- 诊断：不再挂载全局浏览器日志采集；保留有界、按用户隔离的日志 API，不捕获服务端全局 console。
-- 安装 early bridge：在 Tomatojuice 管理区点击“检查首屏状态 → 安装／修复首屏接入”，管理员确认后备份并修改全站 `public/index.html`，刷新页面生效；撤销同理。管理区在前端优化关闭时仍可访问。必须启用宿主 CSRF 保护且具有有效会话；缺权限/旧后端/路径异常会明确提示。后端更新部署后需重启酒馆。
-- 固定管理接口：POST `modules/tomatojuice/early/manage/status`、`early/install`、`early/uninstall`、`early/cleanup-legacy`；写入仅管理员+有效会话 CSRF+JSON `{ "confirm": true }`，不接受路径/HTML。能力为 `early-management`；不提供通用文件编辑。
-- CLI 保留为恢复工具：`node plugins/st-toolbox-server/tools/early-bridge.mjs status .` 只读检查，`install . --apply` 安装可选桥接，`uninstall . --apply` 恢复 toolbox 原生入口，`cleanup-legacy . --apply` 清理可识别 cocktail-plus HTML。共用固定安装器及全局锁；先备份，拒绝未知标记内容，不自动刷新或注销 SW。页面打不开时，也可直接运行前端仓库随附目录内的 CLI，无需先部署后端。
-- 没有 command-exec、任意 shell、在线下载更新或任意核心文件改写接口；仅上述显式确认的 HTML 入口安装/撤销。
+- 宿主不含业务代码：启动时从全局扩展目录 `public/scripts/extensions/third-party/st-toolbox/server/index.mjs` 加载后端实现（当前含 `tomatojuice` 模块）。更新 st-toolbox 扩展即更新后端，重启酒馆生效，无需再复制。
+- 只信任全局（管理员“为所有用户安装”）的扩展目录；用户级扩展目录不会被加载为服务端代码。
+- 宿主与实现之间的协议为 `HOST_ABI`；不一致时插件初始化失败并在日志提示重新复制本目录。
+- 本地配置：可选 `tomatojuice.config.json` 放在**本目录**（扩展更新不会覆盖），启动时读取，不提供网络修改接口。字段见扩展 `server/modules/tomatojuice/config.js`。
+- 缓存：`DATA_ROOT/_st-toolbox/tomatojuice-cache-v2`。
+- 接口：`GET /api/plugins/st-toolbox-server/capabilities`，模块 `/api/plugins/st-toolbox-server/modules/tomatojuice/*`。
+- 恢复 CLI：`node public/scripts/extensions/third-party/st-toolbox/server/tools/early-bridge.mjs status .`（在酒馆根目录）。
+- TauriTavern 没有 Node 服务端插件，st-toolbox 在 TT 下不使用本后端，角色列表等全部走 TT 原生实现。
 
-完整对照、保存冲突策略、日志归因和验收清单见前端仓库的 `docs/tomatojuice-migration.md`。
-
-扩展模块：静态注册到入口 `modules`，实现 `{ id, version, capabilities, init(router, prefix), exit() }`。所有私有请求必须从酒馆认证用户上下文取得路径，不从客户端接收用户目录或身份。
+安全策略、保存冲突策略、日志归因和验收清单见扩展仓库 `docs/tomatojuice-migration.md`。扩展模块静态注册在 `server/index.mjs` 的 `modules`，实现 `{ id, version, capabilities, init(router, prefix), exit() }`；所有私有请求必须从酒馆认证用户上下文取得路径。

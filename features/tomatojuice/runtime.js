@@ -8,45 +8,6 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// core/backend-client.js
-async function discoverBackend({ refresh: refresh2 = false } = {}) {
-  if (!discovery || refresh2) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3e3);
-    discovery = fetch(`${PREFIX}/capabilities`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }).then(async (res) => res.ok ? res.json() : null).catch(() => null).finally(() => clearTimeout(timeout));
-  }
-  return discovery;
-}
-function moduleUrl(module, route = "") {
-  if (!/^[a-z][a-z0-9-]*$/.test(module) || !route.startsWith("/")) throw new Error("Invalid module route");
-  return `${PREFIX}/modules/${module}${route}`;
-}
-async function backendRequest(module, route, body = {}, { signal } = {}) {
-  const ctx = globalThis.SillyTavern?.getContext?.();
-  const res = await fetch(moduleUrl(module, route), { method: "POST", credentials: "same-origin", headers: ctx?.getRequestHeaders?.() || { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
-  if (!res.ok) {
-    const detail = await res.json().catch(() => null);
-    const message = typeof detail?.error === "string" ? `\uFF1A${detail.error.slice(0, 500)}` : "";
-    throw Object.assign(new Error(`Backend ${module}${route}: HTTP ${res.status}${message}`), { status: res.status });
-  }
-  return res.json();
-}
-var PREFIX, discovery;
-var init_backend_client = __esm({
-  "core/backend-client.js"() {
-    PREFIX = "/api/plugins/st-toolbox-server";
-  }
-});
-
-// features/tomatojuice/client/constants.ts
-var API_PREFIX, FETCH_OBSERVER_FLAG;
-var init_constants = __esm({
-  "features/tomatojuice/client/constants.ts"() {
-    API_PREFIX = "/api/plugins/st-toolbox-server/modules/tomatojuice";
-    FETCH_OBSERVER_FLAG = "__tomatojuiceFetchObserverInstalled";
-  }
-});
-
 // features/tomatojuice/client/st-context.ts
 function getCtx() {
   try {
@@ -61,8 +22,6 @@ function saveSettings() {
   } catch {
   }
 }
-function log(_message, _extra) {
-}
 var init_st_context = __esm({
   "features/tomatojuice/client/st-context.ts"() {
   }
@@ -75,7 +34,6 @@ var init_state = __esm({
     DEFAULT_LOCAL_SETTINGS = {
       autoRegisterServiceWorker: false,
       autoWarm: true,
-      autoRefreshCharactersAfterAsyncMiss: true,
       autoCheckUpdates: false,
       skippedUpdateVersion: ""
     };
@@ -132,7 +90,7 @@ function ensureLocalSettings() {
   }
   s.autoRegisterServiceWorker = Boolean(s.autoRegisterServiceWorker);
   s.autoWarm = Boolean(s.autoWarm);
-  s.autoRefreshCharactersAfterAsyncMiss = Boolean(s.autoRefreshCharactersAfterAsyncMiss);
+  delete s.autoRefreshCharactersAfterAsyncMiss;
   s.autoCheckUpdates = Boolean(s.autoCheckUpdates);
   s.skippedUpdateVersion = String(s.skippedUpdateVersion ?? "").trim();
   state.localSettings = s;
@@ -157,7 +115,41 @@ var init_settings = __esm({
   }
 });
 
+// core/backend-client.js
+var PREFIX = "/api/plugins/st-toolbox-server";
+var discovery;
+async function discoverBackend({ refresh = false } = {}) {
+  if (!discovery || refresh) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3e3);
+    discovery = fetch(`${PREFIX}/capabilities`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }).then(async (res) => res.ok ? res.json() : null).catch(() => null).finally(() => clearTimeout(timeout));
+  }
+  return discovery;
+}
+function moduleUrl(module, route = "") {
+  if (!/^[a-z][a-z0-9-]*$/.test(module) || !route.startsWith("/")) throw new Error("Invalid module route");
+  return `${PREFIX}/modules/${module}${route}`;
+}
+async function backendRequest(module, route, body = {}, { signal } = {}) {
+  const ctx = globalThis.SillyTavern?.getContext?.();
+  const res = await fetch(moduleUrl(module, route), { method: "POST", credentials: "same-origin", headers: ctx?.getRequestHeaders?.() || { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    const message = typeof detail?.error === "string" ? `\uFF1A${detail.error.slice(0, 500)}` : "";
+    throw Object.assign(new Error(`Backend ${module}${route}: HTTP ${res.status}${message}`), { status: res.status });
+  }
+  return res.json();
+}
+
+// features/tomatojuice/client/constants.ts
+var API_PREFIX = "/api/plugins/st-toolbox-server/modules/tomatojuice";
+
+// features/tomatojuice/client/index.ts
+init_settings();
+init_state();
+
 // features/tomatojuice/client/cache-policy.ts
+init_state();
 function cacheEnabled(endpoint) {
   return state.backend?.ok === true && state.backend.readPolicy?.endpoints?.[endpoint]?.enabled === true;
 }
@@ -172,13 +164,10 @@ function applyReadPolicy() {
   const bridge = globalThis.__tomatojuiceEarlyBridge;
   bridge?.updatePolicy?.(state.backend?.ok ? state.backend.readPolicy || disabled : disabled);
 }
-var init_cache_policy = __esm({
-  "features/tomatojuice/client/cache-policy.ts"() {
-    init_state();
-  }
-});
 
 // features/tomatojuice/client/service-worker.ts
+init_st_context();
+init_state();
 function getServiceWorkerScriptURL(reg) {
   return reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || "";
 }
@@ -231,26 +220,9 @@ async function cleanupMigrationWorkers() {
   for (const entry of entries) if (await entry.registration.unregister()) count++;
   return "\u5DF2\u6CE8\u9500 " + count + " \u4E2A\u5DF2\u8BC6\u522B SW\uFF1B\u5F53\u524D\u9875\u9762\u53EF\u80FD\u4ECD\u53D7\u63A7\uFF0C\u4FDD\u5B58\u5DE5\u4F5C\u5E76\u5B8C\u6210 HTML \u4FEE\u590D\u540E\u5237\u65B0\u3002";
 }
-var init_service_worker = __esm({
-  "features/tomatojuice/client/service-worker.ts"() {
-    init_constants();
-    init_st_context();
-    init_state();
-  }
-});
 
 // features/tomatojuice/client/api.ts
-var api_exports = {};
-__export(api_exports, {
-  clearBrowserLogs: () => clearBrowserLogs,
-  clearCache: () => clearCache,
-  fullProbe: () => fullProbe,
-  postJson: () => postJson,
-  probeBackend: () => probeBackend,
-  refreshBrowserLogs: () => refreshBrowserLogs,
-  refreshStatus: () => refreshStatus,
-  warm: () => warm
-});
+init_state();
 async function postJson(url, body = {}, options = {}) {
   if (!url.startsWith(API_PREFIX + "/")) throw new Error("Invalid tomatojuice backend route");
   return backendRequest("tomatojuice", url.slice(API_PREFIX.length), body, options);
@@ -294,103 +266,10 @@ async function clearBrowserLogs() {
   await postJson(`${API_PREFIX}/browser-logs/clear`);
   await refreshBrowserLogs();
 }
-var init_api = __esm({
-  "features/tomatojuice/client/api.ts"() {
-    init_backend_client();
-    init_constants();
-    init_service_worker();
-    init_state();
-    init_cache_policy();
-  }
-});
-
-// features/tomatojuice/client/index.ts
-init_backend_client();
-init_constants();
-init_settings();
-init_state();
-init_cache_policy();
-init_api();
-
-// features/tomatojuice/client/fetch-observer.ts
-init_constants();
-
-// features/tomatojuice/client/characters-refresh.ts
-init_constants();
-init_st_context();
-init_cache_policy();
-var pending;
-var refreshing = false;
-var repeat = false;
-function scheduleCharactersRefresh(source) {
-  clearTimeout(pending);
-  pending = setTimeout(() => {
-    void refresh(source);
-  }, 250);
-}
-async function refresh(source) {
-  if (refreshing) {
-    repeat = true;
-    return;
-  }
-  refreshing = true;
-  try {
-    if (cacheEnabled("characters-all")) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2e3);
-      try {
-        const { postJson: postJson2 } = await Promise.resolve().then(() => (init_api(), api_exports));
-        await postJson2(`${API_PREFIX}/invalidate`, { endpoints: ["characters-all"], reason: source }, { signal: controller.signal });
-        await postJson2(`${API_PREFIX}/warm`, { endpoints: ["characters-all"], wait: false }, { signal: controller.signal });
-      } catch (error) {
-        console.warn("[tomatojuice] \u53EF\u9009\u89D2\u8272\u7F13\u5B58\u51C6\u5907\u5931\u8D25\uFF0C\u7EE7\u7EED\u539F\u751F\u5237\u65B0", error);
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-    const mod = await import(
-      /* @vite-ignore */
-      "/script.js"
-    );
-    if (typeof mod.getCharacters !== "function") throw new Error("Core getCharacters export not available");
-    await mod.getCharacters();
-    log("\u89D2\u8272\u5217\u8868\u5DF2\u66F4\u65B0", { source });
-  } catch (error) {
-    console.warn("[tomatojuice] \u89D2\u8272\u5217\u8868\u5237\u65B0\u5931\u8D25\uFF0C\u53EF\u4F7F\u7528\u9152\u9986\u539F\u751F\u5237\u65B0", error);
-  } finally {
-    refreshing = false;
-    if (repeat) {
-      repeat = false;
-      scheduleCharactersRefresh("queued-mutation");
-    }
-  }
-}
-
-// features/tomatojuice/client/fetch-observer.ts
-var mutations = /* @__PURE__ */ new Set(["create", "import", "edit", "edit-attribute", "delete", "rename", "duplicate", "merge-attributes"]);
-function installFetchObserver() {
-  if (globalThis[FETCH_OBSERVER_FLAG]) return;
-  globalThis[FETCH_OBSERVER_FLAG] = true;
-  const baseFetch = globalThis.fetch;
-  globalThis.fetch = async function(input, init) {
-    const response = await baseFetch.call(this, input, init);
-    try {
-      const url = new URL(input instanceof Request ? input.url : String(input), location.href);
-      const method = String(init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
-      if (url.origin !== location.origin || method !== "POST" || !response.ok) return response;
-      const mutation = url.pathname.startsWith("/api/characters/") && mutations.has(url.pathname.split("/").pop() || "") || url.pathname.endsWith("/modules/tomatojuice/fast/characters-edit");
-      if (mutation) scheduleCharactersRefresh(url.pathname);
-    } catch (error) {
-      console.warn("[tomatojuice] \u89D2\u8272\u5199\u5165\u89C2\u5BDF\u5931\u8D25", error);
-    }
-    return response;
-  };
-}
 
 // features/tomatojuice/client/panel.ts
 init_state();
 init_settings();
-init_api();
 function renderPanel(host) {
   const root = host || document.getElementById("tomatojuice-backend-panel");
   if (!root) return;
@@ -467,8 +346,6 @@ function renderPanel(host) {
 }
 
 // features/tomatojuice/client/early-management.ts
-init_service_worker();
-init_backend_client();
 var status = {
   phase: "unchecked",
   management: null,
@@ -632,12 +509,6 @@ async function startBackendClient() {
   if (started) return;
   started = true;
   ensureLocalSettings();
-  installFetchObserver();
-  const ctx = globalThis.SillyTavern?.getContext?.();
-  for (const key of ["CHARACTER_CREATED", "CHARACTER_DELETED", "CHARACTER_EDITED", "CHARACTER_IMPORTED", "CHARACTER_DUPLICATED", "CHARACTER_RENAMED"]) {
-    const event = ctx?.eventTypes?.[key];
-    if (event) ctx.eventSource.on(event, () => scheduleCharactersRefresh(key));
-  }
   const capabilities = await discoverBackend();
   if (!capabilities?.modules?.some((module) => module.id === "tomatojuice")) return;
   await fullProbe();

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONFIG_PATH, PLUGIN_ID } from './constants.js';
+import { PLUGIN_ID } from './constants.js';
 
 export const DEFAULT_CONFIG = Object.freeze({
     enabled: true,
@@ -143,21 +143,19 @@ export function normalizeConfig(input = {}) {
     return out;
 }
 
-export function loadConfig() {
+function readConfigFile(configPath) {
     try {
-        if (!fs.existsSync(CONFIG_PATH)) return normalizeConfig({});
-        return normalizeConfig(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')));
+        if (!fs.existsSync(configPath)) return normalizeConfig({});
+        return normalizeConfig(JSON.parse(fs.readFileSync(configPath, 'utf8')));
     } catch (error) {
-        console.warn(`[${PLUGIN_ID}] Failed to read config.json, using defaults:`, error);
+        console.warn(`[${PLUGIN_ID}] Failed to read ${path.basename(configPath)}, using defaults:`, error);
         return normalizeConfig({});
     }
 }
 
-export function saveConfig(nextConfig) {
-    const normalized = normalizeConfig(nextConfig);
-    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(normalized, null, 4), 'utf8');
-    config = normalized;
+/** Called once by the backend entry with the host plugin's config file. */
+export function loadConfigFile(configPath) {
+    config = readConfigFile(configPath);
     return config;
 }
 
@@ -165,4 +163,4 @@ export function asBoolean(value, fallback = false) {
     return asBool(value, fallback);
 }
 
-export let config = loadConfig();
+export let config = normalizeConfig({});

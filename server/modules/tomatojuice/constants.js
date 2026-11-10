@@ -12,8 +12,8 @@ export const HEADER_PREFIX = 'x-tomatojuice';
 export const SW_MESSAGE_SOURCE = `${PLUGIN_ID}-sw`;
 
 export const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url));
-export const CONFIG_PATH = path.resolve(PLUGIN_DIR, '../../tomatojuice.config.json');
-export const SERVER_ROOT = path.resolve(PLUGIN_DIR, '../../../..');
+// Local configuration lives in the installed host plugin directory (SillyTavern/plugins/st-toolbox-server).
+export const CONFIG_FILE_NAME = 'tomatojuice.config.json';
 
 function readVersion() {
     try {

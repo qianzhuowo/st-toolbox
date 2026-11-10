@@ -103,9 +103,11 @@ Desktop.ini
 !.env.sample
 
 # Local Tomatojuice runtime data and user-specific backend configuration
+# (config lives in the installed host dir; never commit a copy from the repo host or backend dir)
 /_st-toolbox/
 /data/
 /server-plugin/st-toolbox-server/tomatojuice.config.json
+/server/tomatojuice.config.json
 /server-plugin/st-toolbox-server/_st-toolbox/
 /server-plugin/st-toolbox-server/data/
 

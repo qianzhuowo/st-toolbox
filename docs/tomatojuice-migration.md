@@ -44,7 +44,7 @@
 ## 部署
 
 1. 更新前端 `st-toolbox`。TS 修改后执行 `npm run build:tomatojuice`；普通使用无需构建。
-2. 手动复制整个 `server-plugin/st-toolbox-server` 到 `SillyTavern/plugins/st-toolbox-server`，升级保留目标 `tomatojuice.config.json`。不是复制到前端 third-party 扫描目录；后端无额外运行依赖。
+2. **仅首次**：把扩展内 `server-plugin/st-toolbox-server`（只含宿主加载器）复制到 `SillyTavern/plugins/st-toolbox-server`。后端实现位于扩展 `server/`，宿主在酒馆启动时从全局扩展目录 `public/scripts/extensions/third-party/st-toolbox/server/` 加载，因此以后更新扩展即更新后端，只需重启，无需再复制。扩展必须“为所有用户安装”；可选 `tomatojuice.config.json` 放在宿主目录。宿主协议 `HOST_ABI` 变化时启动日志会提示重新复制一次。
 3. 酒馆配置启用 `enableServerPlugins: true`，由用户手动重启。
 4. 打开“扩展设置 → ST Toolbox → 茄汁 / tomatojuice”。后端不可用仍保留原生请求。无需安装 HTML 入口或注册 SW；需要只读加速时可选“安装／修复首屏接入”。
 
@@ -66,10 +66,10 @@
 新代码无法凭空修复已经删除的旧后端或尚未更新的浏览器 SW。可临时恢复旧后端进入旧工具撤销，或由用户离线运行随附 CLI（无需部署后端，不会重启）：
 
 ```powershell
-# 在酒馆根目录，路径也可指向前端仓库随附的脚本
-node plugins/st-toolbox-server/tools/early-bridge.mjs status .
-node plugins/st-toolbox-server/tools/early-bridge.mjs cleanup-legacy . --apply
-node plugins/st-toolbox-server/tools/early-bridge.mjs uninstall . --apply
+# 在酒馆根目录运行扩展随附的脚本
+node public/scripts/extensions/third-party/st-toolbox/server/tools/early-bridge.mjs status .
+node public/scripts/extensions/third-party/st-toolbox/server/tools/early-bridge.mjs cleanup-legacy . --apply
+node public/scripts/extensions/third-party/st-toolbox/server/tools/early-bridge.mjs uninstall . --apply
 ```
 
 `cleanup-legacy` 只清理可识别 cocktail-plus HTML；`uninstall` 撤销 toolbox HTML。CLI 与面板共用验证、备份和锁。异常结构应按备份手动核对，不要直接覆盖整份 HTML 丢掉后续编辑。CLI 不会注销浏览器 SW，需在浏览器开发者工具 Application → Service Workers 中核对准确 URL 后注销旧 worker。保存工作、完成 HTML 修复后再刷新。
