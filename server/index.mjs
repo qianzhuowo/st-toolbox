@@ -6,7 +6,7 @@ import { CONFIG_FILE_NAME } from './modules/tomatojuice/constants.js';
 // Contract with the stable host plugin (server-plugin/st-toolbox-server). Bump only when init/exit semantics change;
 // users must then re-copy the host once.
 export const HOST_ABI = 1;
-export const info = { id: 'st-toolbox-server', name: 'ST Toolbox Server', description: 'Modular ST Toolbox backend', version: '1.2.0' };
+export const info = { id: 'st-toolbox-server', name: 'ST Toolbox Server', description: 'Modular ST Toolbox backend', version: '2.0.0' };
 // Modules are statically registered: never resolve a request-supplied import or execute commands.
 export const modules = [tomatojuice];
 let active = [];
