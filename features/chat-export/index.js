@@ -108,6 +108,7 @@ export function createChatExportFeature({ eventSource, eventTypes, settings, sav
                         </section>
                         <details class="st-toolbox-export-notes">
                             <summary><i class="fa-solid fa-circle-info" aria-hidden="true"></i>导出说明</summary>
+                            <p>已隐藏的楼层（/hide 或幽灵图标）按原角色正常导出；“系统消息”仅指注释、旁白等 ST 系统消息。</p>
                             <p>使用原始文本，楼层从 0 开始，不依赖页面是否已加载。每楼只导出当前回复，不含历史 swipe、附件文件及扩展元数据。清理不会修改原聊天。</p>
                             <p>思维链标签包括 think、thinking、reasoning、analysis，以及当前 ST 思维链模板中的成对标签。其他自定义标签请在“移除这些标签”中指定。</p>
                             <p>标签大小写不敏感，支持属性、嵌套与跨行；代码块内的真实标签也会被处理，转义的 &amp;lt;tag&amp;gt; 不会。所选标签若未闭合，将删除至该楼末尾。普通 HTML 标签不会默认勾选。</p>

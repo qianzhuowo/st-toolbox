@@ -1,4 +1,4 @@
-import { parseFloorRanges } from './processor.js';
+import { isSystemMessage, parseFloorRanges } from './processor.js';
 
 const MAX_CHARACTERS = 64 * 1024 * 1024;
 const MAX_MESSAGES = 200000;
@@ -26,12 +26,14 @@ export async function snapshotChat(chat, options, { signal, isCurrent = () => tr
         const inRange = ranges[rangeIndex] && floor >= ranges[rangeIndex][0];
         const source = chat[floor] || {};
         const isUser = Boolean(source.is_user);
-        const isSystem = Boolean(source.is_system);
+        const isSystem = isSystemMessage(source);
         const matches = options.role === 'all'
             ? (!isSystem || options.includeSystem)
             : (!isSystem && (options.role === 'user' ? isUser : !isUser));
         // Retain positions for the zero-based floor parser without cloning unselected text.
-        const message = { is_user: isUser, is_system: isSystem, mes: '' };
+        // is_system is kept verbatim (it also marks hidden floors); extra.type identifies real system messages.
+        const systemType = isSystem ? source.extra.type.slice(0, 64) : '';
+        const message = { is_user: isUser, is_system: Boolean(source.is_system), mes: '', extra: systemType ? { type: systemType } : {} };
         if (inRange && matches) {
             message.name = typeof source.name === 'string' ? source.name : (isUser ? 'User' : 'Character');
             message.mes = typeof source.mes === 'string' ? source.mes : '';
@@ -41,7 +43,7 @@ export async function snapshotChat(chat, options, { signal, isCurrent = () => tr
             }
             const reasoning = !options.removeReasoning && typeof source.extra?.reasoning === 'string'
                 ? source.extra.reasoning : '';
-            message.extra = reasoning ? { reasoning } : {};
+            if (reasoning) message.extra.reasoning = reasoning;
             characters += message.name.length + message.mes.length + reasoning.length
                 + (typeof message.send_date === 'string' ? message.send_date.length : 0);
             checkSize();

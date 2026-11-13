@@ -279,6 +279,14 @@ function* jsonString(output, parts) {
 
 const string = value => typeof value === 'string' ? value : '';
 
+/**
+ * ST hides a floor from the prompt by setting is_system (/hide, ghost button); genuine system
+ * messages (comments, narrator, help…) additionally carry extra.type. Hidden floors keep their role.
+ */
+export function isSystemMessage(message) {
+    return Boolean(message.is_system) && typeof message.extra?.type === 'string' && message.extra.type !== '';
+}
+
 function* jsonHeader(output, header) {
     yield* output.append('{"user_name":');
     yield* jsonString(output, [string(header.user_name)]);
@@ -298,6 +306,11 @@ function* serialize(output, message, floor, body, reasoning, options) {
         yield* output.append(',"mes":');
         yield* jsonString(output, body);
         yield* output.append(',"extra":{');
+        if (isSystemMessage(message)) {
+            yield* output.append('"type":');
+            yield* jsonString(output, [message.extra.type]);
+            yield* output.append(',');
+        }
         if (reasoning !== null) {
             yield* output.append('"reasoning":');
             yield* jsonString(output, reasoning);
@@ -306,7 +319,7 @@ function* serialize(output, message, floor, body, reasoning, options) {
         yield* output.append(`"st_toolbox_original_floor":${floor}}}\n`);
         return;
     }
-    const speaker = name || (message.is_system ? 'System' : message.is_user ? options.header.user_name || 'User' : options.header.character_name || 'Character');
+    const speaker = name || (isSystemMessage(message) ? 'System' : message.is_user ? options.header.user_name || 'User' : options.header.character_name || 'Character');
     yield* output.append(`${options.format === 'md' ? '## ' : ''}#${floor} `);
     yield* output.append(string(speaker));
     yield* output.append('\n\n');
@@ -415,7 +428,7 @@ async function execute(messages, options, runtime) {
         const message = messages[floor];
         while (rangeIndex < ranges.length && ranges[rangeIndex][1] < floor) rangeIndex++;
         const inRange = rangeIndex < ranges.length && ranges[rangeIndex][0] <= floor;
-        const isSystem = Boolean(message.is_system);
+        const isSystem = isSystemMessage(message);
         const isUser = Boolean(message.is_user);
         const inRole = role === 'all' ? (!isSystem || Boolean(options.includeSystem)) : !isSystem && (role === 'user' ? isUser : !isUser);
         if (inRange && inRole) {
