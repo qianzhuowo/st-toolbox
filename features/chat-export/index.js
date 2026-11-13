@@ -55,50 +55,73 @@ export function createChatExportFeature({ eventSource, eventTypes, settings, sav
             ]);
             const root = document.createElement('div');
             root.className = 'st-toolbox-export-dialog';
+            // Layout: fixed header, scrollable body, fixed footer. The footer keeps the
+            // export action reachable on short (mobile) viewports where ST's popup clips overflow.
             root.innerHTML = `
-                <h3>导出当前对话</h3>
-                <p class="st-toolbox-export-help" data-ui="scope"></p>
-                <fieldset data-ui="fields">
-                    <div class="st-toolbox-export-grid">
-                        <label>导出对象
-                            <select class="text_pole" data-ui="role">
-                                <option value="all">全部（char + user）</option>
-                                <option value="char">仅角色（char，群聊含所有角色）</option>
-                                <option value="user">仅用户（user）</option>
-                            </select>
-                        </label>
-                        <label>文件格式
-                            <select class="text_pole" data-ui="format">
-                                <option value="txt">TXT 纯文本</option>
-                                <option value="md">Markdown</option>
-                                <option value="jsonl">JSONL（可导入 SillyTavern）</option>
-                            </select>
-                        </label>
-                    </div>
-                    <label>楼层（留空或 * 表示全部）
-                        <input class="text_pole" data-ui="floors" maxlength="4096" placeholder="例如：0-10,15,20-30" autocomplete="off" aria-describedby="st-toolbox-export-floor-summary">
-                        <small id="st-toolbox-export-floor-summary" data-ui="floorSummary" aria-live="polite"></small>
-                    </label>
-                    <label class="checkbox_label"><input type="checkbox" data-ui="includeSystem">全部导出时包含系统消息</label>
-                    <label class="checkbox_label"><input type="checkbox" data-ui="removeReasoning">移除思维链（独立思维链及正文思维链标签）</label>
-                    <p class="st-toolbox-export-help">思维链标签包括 think、thinking、reasoning、analysis，以及当前 ST 思维链模板中的成对标签。其他自定义标签请在下方指定。</p>
-                    <label>移除这些标签及包裹内容（逗号或空格分隔）
-                        <input class="text_pole" data-ui="tags" maxlength="32768" placeholder="例如：status, StatusBlock, 状态栏" autocomplete="off">
-                    </label>
-                    <div class="st-toolbox-export-actions">
-                        <button type="button" class="menu_button" data-ui="detect"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>探测所选楼层的标签</button>
-                        <button type="button" class="menu_button" data-ui="clear">清空标签选择</button>
-                    </div>
-                    <div class="st-toolbox-export-candidates" data-ui="candidates">点击探测后可勾选标签，也可以直接输入标签名。</div>
-                </fieldset>
-                <p class="st-toolbox-export-help">使用原始文本，楼层从 0 开始，不依赖页面是否已加载。每楼只导出当前回复，不含历史 swipe、附件文件及扩展元数据。清理不会修改原聊天。</p>
-                <p class="st-toolbox-export-help">标签大小写不敏感，支持属性、嵌套与跨行；代码块内的真实标签也会被处理，转义的 &amp;lt;tag&amp;gt; 不会。所选标签若未闭合，将删除至该楼末尾。普通 HTML 标签不会默认勾选。</p>
-                <div class="st-toolbox-export-actions">
-                    <button type="button" class="menu_button" data-ui="export"><i class="fa-solid fa-file-export" aria-hidden="true"></i>导出文件</button>
-                    <button type="button" class="menu_button" data-ui="cancel" hidden>取消任务</button>
+                <header class="st-toolbox-export-header">
+                    <h3><i class="fa-solid fa-file-export" aria-hidden="true"></i>导出当前对话</h3>
+                    <p class="st-toolbox-export-subtitle" data-ui="scope"></p>
+                </header>
+                <div class="st-toolbox-export-body">
+                    <fieldset data-ui="fields">
+                        <section class="st-toolbox-export-card">
+                            <h4><i class="fa-solid fa-list-check" aria-hidden="true"></i>导出范围</h4>
+                            <div class="st-toolbox-export-grid">
+                                <label>导出对象
+                                    <select class="text_pole" data-ui="role">
+                                        <option value="all">全部（char + user）</option>
+                                        <option value="char">仅角色（群聊含所有角色）</option>
+                                        <option value="user">仅用户（user）</option>
+                                    </select>
+                                </label>
+                                <label>文件格式
+                                    <select class="text_pole" data-ui="format">
+                                        <option value="txt">TXT 纯文本</option>
+                                        <option value="md">Markdown</option>
+                                        <option value="jsonl">JSONL（可导入 SillyTavern）</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <label>楼层（留空或 * 表示全部）
+                                <input class="text_pole" data-ui="floors" maxlength="4096" placeholder="例如：0-10,15,20-30" autocomplete="off" inputmode="text" aria-describedby="st-toolbox-export-floor-summary">
+                            </label>
+                            <div class="st-toolbox-export-chips" data-ui="floorPresets" role="group" aria-label="快速选择楼层">
+                                <button type="button" class="st-toolbox-export-chip" data-floors="all">全部</button>
+                                <button type="button" class="st-toolbox-export-chip" data-floors="20">最近 20 楼</button>
+                                <button type="button" class="st-toolbox-export-chip" data-floors="50">最近 50 楼</button>
+                                <button type="button" class="st-toolbox-export-chip" data-floors="100">最近 100 楼</button>
+                            </div>
+                            <small class="st-toolbox-export-hint" id="st-toolbox-export-floor-summary" data-ui="floorSummary" aria-live="polite"></small>
+                            <label class="checkbox_label"><input type="checkbox" data-ui="includeSystem">全部导出时包含系统消息</label>
+                        </section>
+                        <section class="st-toolbox-export-card">
+                            <h4><i class="fa-solid fa-broom" aria-hidden="true"></i>内容清理</h4>
+                            <label class="checkbox_label"><input type="checkbox" data-ui="removeReasoning">移除思维链（独立思维链及正文思维链标签）</label>
+                            <label>移除这些标签及包裹内容（逗号或空格分隔）
+                                <input class="text_pole" data-ui="tags" maxlength="32768" placeholder="例如：status, StatusBlock, 状态栏" autocomplete="off">
+                            </label>
+                            <div class="st-toolbox-export-actions">
+                                <button type="button" class="menu_button" data-ui="detect"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>探测标签</button>
+                                <button type="button" class="menu_button" data-ui="clear"><i class="fa-solid fa-eraser" aria-hidden="true"></i>清空</button>
+                            </div>
+                            <div class="st-toolbox-export-candidates" data-ui="candidates">点击“探测标签”后可勾选，也可以直接输入标签名。</div>
+                        </section>
+                        <details class="st-toolbox-export-notes">
+                            <summary><i class="fa-solid fa-circle-info" aria-hidden="true"></i>导出说明</summary>
+                            <p>使用原始文本，楼层从 0 开始，不依赖页面是否已加载。每楼只导出当前回复，不含历史 swipe、附件文件及扩展元数据。清理不会修改原聊天。</p>
+                            <p>思维链标签包括 think、thinking、reasoning、analysis，以及当前 ST 思维链模板中的成对标签。其他自定义标签请在“移除这些标签”中指定。</p>
+                            <p>标签大小写不敏感，支持属性、嵌套与跨行；代码块内的真实标签也会被处理，转义的 &amp;lt;tag&amp;gt; 不会。所选标签若未闭合，将删除至该楼末尾。普通 HTML 标签不会默认勾选。</p>
+                        </details>
+                    </fieldset>
                 </div>
-                <progress data-ui="progress" max="1" value="0" hidden></progress>
-                <div class="st-toolbox-export-status" data-ui="status" role="status" aria-live="polite"></div>`;
+                <footer class="st-toolbox-export-footer">
+                    <progress data-ui="progress" max="1" value="0" hidden></progress>
+                    <div class="st-toolbox-export-status" data-ui="status" role="status" aria-live="polite"></div>
+                    <div class="st-toolbox-export-footer-actions">
+                        <button type="button" class="menu_button" data-ui="cancel" hidden><i class="fa-solid fa-ban" aria-hidden="true"></i>取消任务</button>
+                        <button type="button" class="menu_button st-toolbox-export-primary" data-ui="export"><i class="fa-solid fa-download" aria-hidden="true"></i>导出文件</button>
+                    </div>
+                </footer>`;
             const ui = Object.fromEntries(Array.from(root.querySelectorAll('[data-ui]'), node => [node.dataset.ui, node]));
             const preferences = settings.chatExport;
             ui.role.value = preferences.role;
@@ -114,7 +137,7 @@ export function createChatExportFeature({ eventSource, eventTypes, settings, sav
             };
             const updateScope = () => {
                 const total = context.chat.length;
-                ui.scope.textContent = `当前聊天：${String(context.chatId || context.name2 || '聊天')}。范围先按原始楼层选择，再筛选对象。`;
+                ui.scope.textContent = `${String(context.chatId || context.name2 || '聊天')} · 共 ${total} 楼`;
                 ui.floorSummary.textContent = total
                     ? `当前共 ${total} 楼，可填写编号：0–${total - 1}（含首尾；按筛选前的全部消息计数）。`
                     : '当前共 0 楼，暂无可导出的消息。';
@@ -248,6 +271,15 @@ export function createChatExportFeature({ eventSource, eventTypes, settings, sav
             for (const control of [ui.role, ui.floors, ui.includeSystem, ui.removeReasoning]) {
                 control.addEventListener('change', () => { resetCandidates(); updateScope(); });
             }
+            ui.floorPresets.addEventListener('click', event => {
+                const preset = event.target?.closest?.('[data-floors]')?.dataset.floors;
+                if (!preset || ui.fields.disabled) return;
+                const total = context.chat.length;
+                const count = Number(preset);
+                ui.floors.value = preset === 'all' || !total || count >= total ? '' : `${total - count}-${total - 1}`;
+                resetCandidates();
+                updateScope();
+            });
             ui.tags.addEventListener('input', synchronizeCheckboxes);
             ui.clear.addEventListener('click', () => { ui.tags.value = ''; synchronizeCheckboxes(); });
             ui.detect.addEventListener('click', () => void perform('detect'));
@@ -255,13 +287,14 @@ export function createChatExportFeature({ eventSource, eventTypes, settings, sav
             ui.cancel.addEventListener('click', () => { cancelReason = '操作已取消。'; controller?.abort(); });
             updateScope();
             const popup = new Popup(root, POPUP_TYPE.TEXT, '', {
-                okButton: '关闭', wide: true, leftAlign: true,
+                okButton: '关闭', leftAlign: true,
                 onClosing: () => {
                     closed = true;
                     controller?.abort();
                     return true;
                 },
             });
+            popup.dlg?.classList.add('st-toolbox-export-popup');
             await popup.show();
         } catch (error) {
             console.error('[st-toolbox] 无法打开对话导出：', error);

@@ -1,5 +1,7 @@
 import { createNativeMenuItem } from '../../core/native-menu.mjs';
+import { getContext } from '../../../../../extensions.js';
 import { createMessageButtons } from './message-buttons.mjs';
+import { applyRedaction, compileRedaction, MAX_REDACTION_RULES, MAX_REDACTION_TEXT } from './redaction.mjs';
 const SCRIPT_ID = 'st-toolbox-modern-screenshot';
 const LIBRARY_URL = '/scripts/extensions/third-party/st-toolbox/features/screenshot/vendor/modern-screenshot.umd.js';
 const MESSAGE_BUTTON_CLASS = 'st-toolbox-screenshot-button';
@@ -760,6 +762,7 @@ async function createMessageContext(library, element, scale, task) {
         style: { margin: '0' },
         fetchFn: task.fetchFn,
         onCloneEachNode: cloned => shrinkClonedDataImage(cloned, task),
+        onCloneNode: cloned => { task.redactionHits += applyRedaction(cloned, task.settings.redaction); },
         onCreateForeignObjectSvg: addSvgCaptureStyles,
     });
     try {
@@ -1264,6 +1267,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
                 format: featureSettings.format,
                 quality: featureSettings.quality,
                 backgroundMode: featureSettings.backgroundMode,
+                redaction: compileRedaction(featureSettings.redaction, currentChatNames()),
             });
             const gap = validElements.length > 1 ? 5 : 0;
             const taskId = ++taskGeneration;
@@ -1277,6 +1281,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
                 imageBudget: new Map(),
                 lossless: captureSettings.format === 'png',
                 failures: new Set(),
+                redactionHits: 0,
             };
             task.assertActive = () => {
                 const sourceInvalid = task.elements.some(element => !element.isConnected || !task.chat.contains(element));
@@ -1304,7 +1309,9 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             const { blob, extension } = await buildScreenshot(validElements, task);
             task.assertActive();
             downloadBlob(blob, buildFilename(validElements.length, extension));
-            showToast('success', '截图已生成。');
+            showToast('success', captureSettings.redaction
+                ? `截图已生成，已打码/替换 ${task.redactionHits} 处文字。`
+                : '截图已生成。');
             if (task.failures.size) {
                 showToast('warning', `截图已完成，但有 ${task.failures.size} 个外部来源的图片未能嵌入。`);
             }
@@ -1549,6 +1556,148 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
         controls.quality.disabled = !enabled || featureSettings.format === 'png';
         controls.background.disabled = !enabled;
         controls.neighborCount.disabled = !enabled || !featureSettings.showMessageButtons;
+        updateRedactionControls();
+    }
+
+    function redactionRuleRow(rule, index) {
+        const row = document.createElement('div');
+        row.className = 'st-toolbox-redaction-rule';
+        row.dataset.index = String(index);
+        const text = document.createElement('input');
+        text.type = 'text';
+        text.className = 'text_pole';
+        text.dataset.field = 'text';
+        text.maxLength = MAX_REDACTION_TEXT;
+        text.placeholder = '文字，或 {{user}} / {{char}}';
+        text.setAttribute('aria-label', '要打码的文字');
+        text.value = rule.text;
+        const mode = document.createElement('select');
+        mode.className = 'text_pole';
+        mode.dataset.field = 'mode';
+        mode.setAttribute('aria-label', '处理方式');
+        mode.innerHTML = '<option value="mosaic">马赛克</option><option value="replace">替换为</option>';
+        mode.value = rule.mode;
+        const replacement = document.createElement('input');
+        replacement.type = 'text';
+        replacement.className = 'text_pole';
+        replacement.dataset.field = 'replacement';
+        replacement.maxLength = MAX_REDACTION_TEXT;
+        replacement.placeholder = '替换成的文字';
+        replacement.setAttribute('aria-label', '替换成的文字');
+        replacement.value = rule.replacement;
+        replacement.hidden = rule.mode !== 'replace';
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'menu_button st-toolbox-icon-button';
+        remove.dataset.action = 'remove';
+        remove.title = '删除此规则';
+        remove.setAttribute('aria-label', '删除此规则');
+        remove.innerHTML = '<i class="fa-solid fa-trash-can" aria-hidden="true"></i>';
+        row.append(text, mode, replacement, remove);
+        return row;
+    }
+
+    function renderRedactionRules() {
+        if (!controls) return;
+        const rules = featureSettings.redaction.rules;
+        const list = controls.redactionRules;
+        list.replaceChildren(...rules.map(redactionRuleRow));
+        if (!rules.length) {
+            const empty = document.createElement('div');
+            empty.className = 'st-toolbox-redaction-empty';
+            empty.textContent = '暂无规则。点击上方按钮快速填入名字或新增规则。';
+            list.appendChild(empty);
+        }
+        updateRedactionControls();
+    }
+
+    function updateRedactionControls() {
+        if (!controls) return;
+        const redaction = featureSettings.redaction;
+        const enabled = featureSettings.enabled;
+        const full = redaction.rules.length >= MAX_REDACTION_RULES;
+        controls.redactionEnabled.checked = redaction.enabled;
+        controls.redactionIgnoreCase.checked = redaction.ignoreCase;
+        controls.redactionEnabled.disabled = !enabled;
+        controls.redactionIgnoreCase.disabled = !enabled;
+        controls.redactionAddUser.disabled = !enabled || full;
+        controls.redactionAddChar.disabled = !enabled || full;
+        controls.redactionAdd.disabled = !enabled || full;
+        controls.redactionRules.classList.toggle('st-toolbox-redaction-inactive', !enabled || !redaction.enabled);
+        controls.redactionRules.querySelectorAll('input, select, button').forEach(control => { control.disabled = !enabled; });
+    }
+
+    /** 截图时用于展开 {{user}} / {{char}} 的当前名字；群聊中 char 为全部成员。 */
+    function currentChatNames() {
+        const context = getContext();
+        let chars = [];
+        if (context.groupId) {
+            const group = context.groups?.find(item => item.id === context.groupId);
+            chars = (group?.members || []).map(avatar => context.characters?.find(character => character.avatar === avatar)?.name);
+        } else if (context.characterId != null) {
+            chars = [context.name2];
+        }
+        return { user: context.name1, chars: chars.filter(Boolean) };
+    }
+
+    function addMacroRule(macro) {
+        const rules = featureSettings.redaction.rules;
+        if (rules.some(rule => rule.text.trim().toLowerCase() === macro)) {
+            showToast('info', `${macro} 已在规则中。`);
+            return;
+        }
+        if (rules.length >= MAX_REDACTION_RULES) return;
+        rules.push({ text: macro, mode: 'mosaic', replacement: '' });
+        featureSettings.redaction.enabled = true;
+        saveSettings();
+        renderRedactionRules();
+    }
+
+    function bindRedactionSettings() {
+        controls.redactionEnabled.addEventListener('change', () => {
+            featureSettings.redaction.enabled = controls.redactionEnabled.checked;
+            saveSettings();
+            updateRedactionControls();
+        });
+        controls.redactionIgnoreCase.addEventListener('change', () => {
+            featureSettings.redaction.ignoreCase = controls.redactionIgnoreCase.checked;
+            saveSettings();
+        });
+        controls.redactionAddUser.addEventListener('click', () => addMacroRule('{{user}}'));
+        controls.redactionAddChar.addEventListener('click', () => addMacroRule('{{char}}'));
+        controls.redactionAdd.addEventListener('click', () => {
+            if (featureSettings.redaction.rules.length >= MAX_REDACTION_RULES) return;
+            featureSettings.redaction.rules.push({ text: '', mode: 'mosaic', replacement: '' });
+            saveSettings();
+            renderRedactionRules();
+            controls.redactionRules.querySelector('.st-toolbox-redaction-rule:last-child input')?.focus();
+        });
+        const ruleAt = target => {
+            const row = target.closest('.st-toolbox-redaction-rule');
+            const index = Number(row?.dataset.index);
+            return { row, index, rule: featureSettings.redaction.rules[index] };
+        };
+        controls.redactionRules.addEventListener('input', event => {
+            const { row, rule } = ruleAt(event.target);
+            const field = event.target.dataset.field;
+            if (!rule || !field) return;
+            rule[field] = event.target.value;
+            if (field === 'mode') {
+                const replacement = row.querySelector('[data-field="replacement"]');
+                replacement.hidden = rule.mode !== 'replace';
+                if (!replacement.hidden) replacement.focus();
+            }
+            saveSettings();
+        });
+        controls.redactionRules.addEventListener('click', event => {
+            const button = event.target.closest('[data-action="remove"]');
+            if (!button) return;
+            const { index, rule } = ruleAt(button);
+            if (!rule) return;
+            featureSettings.redaction.rules.splice(index, 1);
+            saveSettings();
+            renderRedactionRules();
+        });
     }
 
     function bindSettings() {
@@ -1691,6 +1840,18 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
                 <select id="st-toolbox-screenshot-neighbor-count" class="text_pole"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
             </label>
             <p class="st-toolbox-help">“当前背景”会合成背景和主题遮罩，读取失败时改用主题底色。复杂模糊效果可能与页面不同。JPEG 不支持透明，会自动填充主题底色。</p>
+            <div class="st-toolbox-redaction">
+                <div class="st-toolbox-redaction-title"><i class="fa-solid fa-user-secret" aria-hidden="true"></i><span>文字打码</span></div>
+                <label class="checkbox_label"><input id="st-toolbox-redaction-enabled" type="checkbox"><span>截图时自动打码 / 替换以下文字</span></label>
+                <label class="checkbox_label"><input id="st-toolbox-redaction-ignore-case" type="checkbox"><span>英文忽略大小写</span></label>
+                <div class="st-toolbox-redaction-quick">
+                    <button type="button" class="menu_button" id="st-toolbox-redaction-add-user"><i class="fa-solid fa-user" aria-hidden="true"></i><span>添加 {{user}}</span></button>
+                    <button type="button" class="menu_button" id="st-toolbox-redaction-add-char"><i class="fa-solid fa-masks-theater" aria-hidden="true"></i><span>添加 {{char}}</span></button>
+                    <button type="button" class="menu_button" id="st-toolbox-redaction-add"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>新增规则</span></button>
+                </div>
+                <div class="st-toolbox-redaction-rules" id="st-toolbox-redaction-rules"></div>
+                <p class="st-toolbox-help">只影响生成的图片，不会修改聊天。“马赛克”保留原文字宽度并覆盖色块；“替换”用指定文字代替（留空即删去）。长文字优先匹配；被样式拆开的文字（如一半加粗）无法匹配。文字中可用酒馆宏 {{user}}、{{char}}（也支持 &lt;USER&gt;、&lt;BOT&gt;、&lt;CHAR&gt;），截图时自动换成当前聊天的名字；群聊中 {{char}} 对应全部成员。想固定某个名字就直接填名字。</p>
+            </div>
         `;
         const find = selector => section.querySelector(selector);
         controls = {
@@ -1705,9 +1866,17 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             qualityValue: find('#st-toolbox-screenshot-quality-value'),
             background: find('#st-toolbox-screenshot-background'),
             neighborCount: find('#st-toolbox-screenshot-neighbor-count'),
+            redactionEnabled: find('#st-toolbox-redaction-enabled'),
+            redactionIgnoreCase: find('#st-toolbox-redaction-ignore-case'),
+            redactionAddUser: find('#st-toolbox-redaction-add-user'),
+            redactionAddChar: find('#st-toolbox-redaction-add-char'),
+            redactionAdd: find('#st-toolbox-redaction-add'),
+            redactionRules: find('#st-toolbox-redaction-rules'),
         };
         bindSettings();
+        bindRedactionSettings();
         updateSettingsControls();
+        renderRedactionRules();
         container.appendChild(section);
     }
 
@@ -1718,6 +1887,7 @@ export function createScreenshotFeature({ eventSource, eventTypes, settings, sav
             exitSelectionMode();
         }
         updateSettingsControls();
+        renderRedactionRules();
         scheduleRefresh();
     }
 

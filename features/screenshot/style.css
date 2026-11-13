@@ -90,3 +90,106 @@ body.st-toolbox-screenshot-selecting #chat .mes_buttons {
 :is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-screenshot-field input[type="range"] {
     width: 100%;
 }
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 16%, transparent);
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-weight: 600;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-quick .menu_button {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: auto;
+    margin: 0;
+    white-space: nowrap;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rules.st-toolbox-redaction-inactive {
+    opacity: 0.55;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(5.5em, auto) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule > .text_pole {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule > [hidden] {
+    display: none !important;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule:has(> [data-field="replacement"][hidden]) > [data-field="mode"] {
+    grid-column: 2 / 4;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule > .menu_button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    margin: 0;
+}
+
+:is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-empty {
+    padding: 8px 10px;
+    font-size: 0.88em;
+    opacity: 0.7;
+    border: 1px dashed color-mix(in srgb, var(--SmartThemeBodyColor) 25%, transparent);
+    border-radius: 6px;
+}
+
+@media (max-width: 520px) {
+    :is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    :is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule > [data-field="text"] {
+        grid-column: 1;
+    }
+
+    :is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule > .menu_button {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    :is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule > [data-field="mode"],
+    :is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule:has(> [data-field="replacement"][hidden]) > [data-field="mode"] {
+        grid-column: 1 / -1;
+    }
+
+    :is(#st-toolbox-settings, #st-toolbox-settings-window) .st-toolbox-redaction-rule > [data-field="replacement"] {
+        grid-column: 1 / -1;
+    }
+}

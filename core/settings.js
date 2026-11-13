@@ -1,6 +1,7 @@
 import { saveSettingsDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { createSettingsWindow, createSettingsLauncher } from '../ui/settings-window.mjs';
+import { normalizeRedactionSettings } from '../features/screenshot/redaction.mjs';
 
 export const EXTENSION_NAME = 'st-toolbox';
 
@@ -49,6 +50,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
         quality: 0.92,
         backgroundMode: 'current',
         neighborCount: 4,
+        redaction: {
+            enabled: false,
+            ignoreCase: true,
+            rules: [],
+        },
     },
 });
 
@@ -121,6 +127,7 @@ function normalizeSettings(settings) {
         ? screenshot.backgroundMode
         : DEFAULT_SETTINGS.screenshot.backgroundMode;
     screenshot.neighborCount = Math.round(Math.min(4, Math.max(1, Number(screenshot.neighborCount) || DEFAULT_SETTINGS.screenshot.neighborCount)));
+    screenshot.redaction = normalizeRedactionSettings(screenshot.redaction);
 }
 
 export function ensureSettings() {
